@@ -16,6 +16,8 @@ export function startHttpServer(options: HttpServerOptions) {
 
   const server = Bun.serve({
     port,
+    // Disable idle timeout so SSE long-lived connections are not cut off.
+    idleTimeout: 0,
     async fetch(req) {
       const url = new URL(req.url);
 
