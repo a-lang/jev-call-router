@@ -5,6 +5,7 @@ export { createJsonLogger, silentLogger } from "./logger.ts";
 export {
   createTranscriptionSpeech,
   createTranscriptionApiSpeech,
+  createElevenLabsSpeech, // ElevenLabs Scribe v2 speech provider
   type TranscriptionOptions,
   type TranscriptionApiOptions,
 } from "./providers/speech.ts";

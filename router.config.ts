@@ -1,6 +1,7 @@
 import {
   createJevDecider,
   createTranscriptionSpeech,
+  createElevenLabsSpeech,
   requireEnv,
   sendWebhook,
   type CallRouterConfig,
@@ -42,13 +43,15 @@ export const prompts = {
   retry: "sound:custom/jev-retry",
 };
 
+const isElevenLabs = process.env.STT_PROVIDER === "elevenlabs";
+
 export function createRouterConfig(logger: Logger): CallRouterConfig {
   return {
     decider: createJevDecider({
       apiKey: requireEnv("TYPESAFE_API_KEY"),
       model: process.env.TYPESAFE_DEFAULT_MODEL,
     }),
-    speech: createTranscriptionSpeech({
+    speech: (isElevenLabs ? createElevenLabsSpeech : createTranscriptionSpeech)({
       apiKey: requireEnv("STT_API_KEY"),
       baseUrl: requireEnv("STT_BASE_URL"),
       model: requireEnv("STT_MODEL"),

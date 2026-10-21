@@ -180,6 +180,10 @@ export function createCallRouter(config: CallRouterConfig): CallRouter {
     if (!heard.ok) {
       return heard;
     }
+    // Optional debug log for STT transcript (enable with STT_DEBUG=1 or true).
+    if (process.env.STT_DEBUG === "1" || process.env.STT_DEBUG === "true") {
+      logger.info("speech.transcribed", { callId: trace.call.id, transcript: heard.value.trim() });
+    }
     return { ok: true, value: heard.value.trim() };
   }
 
