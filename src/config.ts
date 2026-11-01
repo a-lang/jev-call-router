@@ -82,3 +82,13 @@ export function requireEnv(name: string): string {
   }
   return value;
 }
+
+// Read a positive integer from env, falling back to the default when unset/invalid.
+export function envNumber(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) {
+    return fallback;
+  }
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}

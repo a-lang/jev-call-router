@@ -1,8 +1,8 @@
 import { createRouterConfig } from "../router.config.ts";
-import { requireEnv } from "./config.ts";
+import { envNumber, requireEnv } from "./config.ts";
 import { startHttpServer } from "./http.ts";
 import { createJsonLogger, describeError } from "./logger.ts";
-import { connectAsterisk } from "./pbx/asterisk/adapter.ts";
+import { connectAsterisk, DEFAULT_RECORDING } from "./pbx/asterisk/adapter.ts";
 import { validateAsteriskRoutes } from "./pbx/asterisk/dialplan.ts";
 import { createCallRouter } from "./router.ts";
 
@@ -23,6 +23,10 @@ function start(): void {
     app,
     router,
     logger,
+    recording: {
+      maxSeconds: envNumber("RECORD_MAX_SECONDS", DEFAULT_RECORDING.maxSeconds),
+      maxSilenceSeconds: envNumber("RECORD_MAX_SILENCE_SECONDS", DEFAULT_RECORDING.maxSilenceSeconds),
+    },
   });
   logger.info("service.started", { app, routes: Object.keys(config.routes), fallbackRoute: config.fallbackRoute });
 

@@ -103,7 +103,11 @@ afterEach(() => {
   mock?.stop();
 });
 
-function routeThroughMockAri(callerSays: string, hangUpWhileRecording = false) {
+function routeThroughMockAri(
+  callerSays: string,
+  hangUpWhileRecording = false,
+  recording?: { maxSeconds: number; maxSilenceSeconds: number },
+) {
   mock = startMockAri({ callerSays, hangUpWhileRecording });
   const contexts: DecisionContext[] = [];
   let finish: (result: RoutingResult) => void = () => {};
@@ -131,6 +135,7 @@ function routeThroughMockAri(callerSays: string, hangUpWhileRecording = false) {
     password: "ari-secret",
     app: "jev-router",
     router,
+    recording,
   });
   return { mock, contexts, finished };
 }
@@ -157,6 +162,20 @@ describe("Asterisk ARI adapter against a mock ARI server", () => {
       `POST ${channel}/continue?context=ext-queues&extension=402&priority=1`,
     ]);
     expect(new Set(mock.authorization)).toEqual(new Set([`Basic ${btoa("jev:ari-secret")}`]));
+  });
+
+  test("applies custom recording limits to the record request", async () => {
+    const { mock, finished } = routeThroughMockAri("I was charged twice", false, {
+      maxSeconds: 25,
+      maxSilenceSeconds: 4,
+    });
+    (await mock.connected).send(JSON.stringify(stasisStart));
+
+    await finished;
+
+    const record = mock.requests.find((request) => request.includes("/record?"));
+    expect(record).toContain("maxDurationSeconds=25");
+    expect(record).toContain("maxSilenceSeconds=4");
   });
 
   test("stops cleanly when the caller hangs up while being recorded", async () => {

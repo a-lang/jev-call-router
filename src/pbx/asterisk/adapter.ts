@@ -15,7 +15,7 @@ export interface AsteriskConnection {
   close(): void;
 }
 
-const DEFAULT_RECORDING: RecordingOptions = { maxSeconds: 15, maxSilenceSeconds: 2 };
+export const DEFAULT_RECORDING: RecordingOptions = { maxSeconds: 15, maxSilenceSeconds: 2 };
 const CALL_END_EVENTS = new Set(["StasisEnd", "ChannelDestroyed", "ChannelHangupRequest"]);
 
 export function connectAsterisk(options: AsteriskAdapterOptions): AsteriskConnection {
