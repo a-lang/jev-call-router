@@ -44,6 +44,7 @@ export const prompts = {
 };
 
 const isElevenLabs = process.env.STT_PROVIDER === "elevenlabs";
+const debugTranscript = process.env.STT_DEBUG === "1" || process.env.STT_DEBUG === "true";
 
 export function createRouterConfig(logger: Logger): CallRouterConfig {
   return {
@@ -63,6 +64,7 @@ export function createRouterConfig(logger: Logger): CallRouterConfig {
     maxAttempts: 2,
     minConfidence: 0.7,
     routeDirectly: (call) => (call.variables.jev === "off" ? "standard-ivr" : undefined),
+    debugTranscript,
     onResult: (result) => {
       if (process.env.WEBHOOK_URL) {
         void sendWebhook(result, {

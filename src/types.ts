@@ -99,6 +99,7 @@ export interface CallRouterConfig {
   minConfidence?: number;
   timeouts?: Partial<Timeouts>;
   routeDirectly?: (call: CallInfo) => string | undefined;
+  debugTranscript?: boolean;
   facts?: (call: CallInfo) => Record<string, JsonValue>;
   logger?: Logger;
   onResult?: (result: RoutingResult) => void | Promise<void>;
