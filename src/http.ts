@@ -16,12 +16,13 @@ export function startHttpServer(options: HttpServerOptions) {
 
   const server = Bun.serve({
     port,
-    // Disable idle timeout so SSE long-lived connections are not cut off.
-    idleTimeout: 0,
-    async fetch(req) {
+    async fetch(req, server) {
       const url = new URL(req.url);
 
       if (url.pathname === "/events") {
+        // Disable the idle timeout only for the SSE stream; all other connections
+        // keep Bun's default idle cleanup so dead clients are still reclaimed.
+        server.timeout(req, 0);
         return handleSseStream();
       }
 
