@@ -27,7 +27,7 @@ Jev 只回傳「這是哪一類」與信心分數，不碰 PBX。你能執行的
 - 來電者自然說話，不需要記選單。
 - 你把可接受的結果定義成 routes（名稱 + 描述 + 動作）。
 - Jev 只做選擇題：從這份清單裡挑一個，回傳路由名稱與信心分數，不生成自由文字。
-- 信心不足、服務中斷、逾時、聽不懂，一律走你指定的 fallback。
+- 信心不足、服務中斷、逾時、聽不懂，一律走你指定的 fallback；也可以依失敗原因另外設定，例如連續靜音直接掛斷。
 
 因為 Jev 的輸出被限制在已知的 routes 內，它不會編造出一個不存在的分機、動作或指令。清單外的值會被判為 `invalid-decision` 並直接 fallback。它仍可能判斷錯意圖，但錯誤的影響範圍就是你事先寫在 `router.config.ts` 裡的那幾條路徑。
 
@@ -95,7 +95,7 @@ routeDirectly() 命中 ──▶ 直接路由（不呼叫 Jev）
   是已知 route，且信心 ≥ minConfidence？
     ├─ 否 / 需要更多資訊 → 重問（最多 maxAttempts）
     └─ 是 → 執行動作
-  任何階段失敗 → fallbackRoute → 仍失敗 → 回 dialplan
+  任何階段失敗 → fallbackRoute（可用 fallbackRouteByReason 依原因改道）→ 仍失敗 → 回 dialplan
 ```
 
 ## 快速開始
@@ -151,7 +151,7 @@ interface Route {
 ```
 
 - 只有**有 `description`** 的 route 會被提供給 Jev。
-- 沒有 `description` 的 route 只能透過 `routeDirectly()` 或作為 fallback 進入。
+- 沒有 `description` 的 route 只能透過 `routeDirectly()` 或作為 fallback（`fallbackRoute` / `fallbackRouteByReason`）進入。
 - `action` 只有三種：
 
 | 動作 | 效果 |
@@ -185,9 +185,19 @@ export const routes: Record<string, Route> = {
   "after-hours": {
     action: { type: "continue" },
   },
+  // 沒有 description，Jev 看不到；只有 fallbackRouteByReason 會用到
+  hangup: {
+    action: { type: "hangup" },
+    announcement: "sound:custom/jev-no-speech",
+  },
 };
 
 export const fallbackRoute = "human-agent";
+
+// 連續靜音時先播提示音再掛斷；其餘失敗仍走 fallbackRoute
+export const fallbackRouteByReason = {
+  "no-speech": "hangup",
+};
 ```
 
 搭配一條不經過 Jev 的直通規則：
@@ -204,6 +214,7 @@ routeDirectly: (call) =>
 - route 名稱必須符合 `^[a-z0-9][a-z0-9_-]*$`。
 - `need-more-information` 與 `no-matching-route` 是保留名稱。
 - `fallbackRoute` 必填，而且必須是已定義的 route。
+- `fallbackRouteByReason` 的 key 必須是合法的失敗原因，指向的 route 必須已定義，否則啟動時報錯。
 - 至少一個 route 要有 `description`，否則啟動時會直接報錯。
 
 更多完整設定（VIP 直通、營業時間、隱私摘要）見 [examples/routing-scenarios.ts](examples/routing-scenarios.ts)。
@@ -314,7 +325,7 @@ ARI_APP=jev-router
 
 **提示音**
 
-把 `jev-greeting`、`jev-retry`、`jev-connecting` 放進 `/var/lib/asterisk/sounds/custom/`。建議轉成 8 kHz 單聲道：
+把 `jev-greeting`、`jev-retry`、`jev-connecting`、`jev-no-speech` 放進 `/var/lib/asterisk/sounds/custom/`。建議轉成 8 kHz 單聲道：
 
 ```bash
 sox greeting-raw.wav -r 8000 -c 1 -b 16 /var/lib/asterisk/sounds/custom/jev-greeting.wav
@@ -356,7 +367,7 @@ FreePBX 就是 Asterisk，沒有專屬程式碼。差異只在設定位置：
 2. 把 `[jev-router]` 貼進 `extensions_custom.conf`，執行 `fwconsole reload`。
 3. 建一個 Custom Destination 指向 `jev-router,s,1`。
 4. 把要使用 Jev 的 DID 目的地設成這個 Custom Destination。
-5. 在 System Recordings 建立三個提示音。
+5. 在 System Recordings 建立四個提示音（`jev-greeting`、`jev-retry`、`jev-connecting`、`jev-no-speech`）。
 6. route 目的地使用 FreePBX context，例如 `ext-queues,400,1`、`ext-group,600,1`、`from-did-direct,100,1`、`ext-local,vmu100,1`。
 
 ### 接不起來時先看這裡
@@ -371,14 +382,16 @@ FreePBX 就是 Asterisk，沒有專屬程式碼。差異只在設定位置：
 
 ## 失敗時會怎樣
 
-`fallbackRoute` 必填。以下情況都會落到它：
+`fallbackRoute` 必填。以下情況都會落到它（可用 `fallbackRouteByReason` 為特定原因指定別的 route）：
 
-- **語音階段**：沒聽到聲音、STT 失敗、STT 逾時（8 秒）
+- **語音階段**：沒聽到聲音（預設設定改掛斷，見下方）、STT 失敗、STT 逾時（8 秒）
 - **理解階段**：interpreter 失敗或逾時（6 秒）
 - **決策階段**：Jev 失敗或逾時（5 秒）、回傳不存在的 route、信心低於 `minConfidence`、重問後仍需要更多資訊、無對應 route
 - **執行階段**：轉接失敗、PBX 錯誤
 
 如果 fallback 的動作也失敗，router 會把通話交回 dialplan（`continue`），由你 `Stasis()` 下一行的保底邏輯接手。來電者在過程中掛斷的話，不會執行任何動作。
+
+預設的 `router.config.ts` 用 `fallbackRouteByReason` 把 `no-speech` 導向 `hangup` route：連續靜音時先播 `sound:custom/jev-no-speech` 再掛斷，不轉真人；其他原因仍轉 `human-agent`。注意掛斷不經過 dialplan，`Stasis()` 下一行的保底不會被觸發；若掛斷本身失敗，router 仍會把通話交回 dialplan。
 
 每次通話都會產生一個 `RoutingResult`，包含 `outcome`（`jev` / `direct` / `fallback` / `caller-hung-up`）、選中的 route、fallback 原因、Jev 的選擇與機率、嘗試次數，以及各階段耗時。
 
@@ -469,6 +482,7 @@ interface CallInterpreter {
 |---|---|---|
 | `routes` | 必填 | 你的分流結果；只有有 `description` 的會給 Jev |
 | `fallbackRoute` | 必填 | 無法安全完成時使用的 route |
+| `fallbackRouteByReason` | 無 | 依失敗原因改走指定 route；未設定的原因仍用 `fallbackRoute` |
 | `prompts.greeting` | 必填 | 第一次播放的語音 |
 | `prompts.retry` | 同 greeting | 重問時播放的語音 |
 | `maxAttempts` | `2` | 最多聽幾次 |
@@ -539,6 +553,8 @@ curl -X POST http://localhost:3000/simulate \
   }
 }
 ```
+
+注意 `data.route` 的值域：`fallbackRouteByReason` 可讓 fallback 走到 `hangup` 這類 route；若 fallback 動作執行失敗而回 dialplan，`route` 會是 `undefined`。統計端不應假設值域固定。
 
 有 `WEBHOOK_SECRET` 時，會多一個 `X-Jev-Signature` header，內容是原始 body 的 HMAC-SHA256 hex：
 

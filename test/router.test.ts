@@ -3,6 +3,7 @@ import {
   CallEndedError,
   createCallRouter,
   createScriptedSession,
+  eventHub,
   textSpeech,
   type CallRouterConfig,
   type Decision,
@@ -43,8 +44,13 @@ function config(overrides: Partial<CallRouterConfig> = {}): CallRouterConfig {
         announcement: "sound:connecting",
       },
       "normal-ivr": { action: { type: "continue" } },
+      hangup: {
+        action: { type: "hangup" },
+        announcement: "sound:no-speech",
+      },
     },
     fallbackRoute: "reception",
+    fallbackRouteByReason: { "no-speech": "hangup" },
     prompts: { greeting: "sound:greeting", retry: "sound:retry" },
     ...overrides,
   };
@@ -150,6 +156,7 @@ describe("fallback behavior", () => {
     const decider = scriptedDecider(decision("billing", 0.4), decision("sales", 0.5));
     const { result } = await fallbackFor({ decider }, ["uh", "hmm"]);
     expect(result.fallbackReason).toBe("low-confidence");
+    expect(result.route).toBe("reception");
     expect(result.attempts).toBe(2);
   });
 
@@ -159,17 +166,62 @@ describe("fallback behavior", () => {
     expect(result.attempts).toBe(1);
   });
 
-  test("silence on every attempt falls back without calling Jev", async () => {
+  test("silence on every attempt hangs up via the no-speech route without calling Jev", async () => {
     const decider = scriptedDecider();
-    const { result } = await fallbackFor({ decider }, [undefined, undefined]);
+    const { result, session } = await fallbackFor({ decider }, [undefined, undefined]);
+    expect(result.outcome).toBe("fallback");
     expect(result.fallbackReason).toBe("no-speech");
+    expect(result.route).toBe("hangup");
+    expect(result.action).toEqual({ type: "hangup" });
+    expect(session.played).toEqual(["sound:greeting", "sound:retry", "sound:no-speech"]);
+    expect(session.executed).toEqual([{ type: "hangup" }]);
     expect(decider.contexts).toHaveLength(0);
+  });
+
+  test("the call.fallback event carries the resolved route", async () => {
+    const fallbackEvents: Record<string, unknown>[] = [];
+    const unsubscribe = eventHub.subscribe((event) => {
+      if (event.event === "call.fallback") {
+        fallbackEvents.push(event.data);
+      }
+    });
+    try {
+      await fallbackFor({}, [undefined, undefined]);
+    } finally {
+      unsubscribe();
+    }
+
+    expect(fallbackEvents).toHaveLength(1);
+    expect(fallbackEvents[0]!.route).toBe("hangup");
+    expect(fallbackEvents[0]!.destination).toEqual({ type: "hangup" });
+    expect(fallbackEvents[0]!.reason).toBe("no-speech");
+  });
+
+  test("a failed no-speech hangup returns the call to the PBX", async () => {
+    const router = createCallRouter(config());
+    const session = createScriptedSession(call, [undefined, undefined]);
+    session.execute = async (action) => {
+      if (action.type === "hangup") {
+        throw new Error("PBX rejected hangup");
+      }
+      session.executed.push(action);
+    };
+
+    const result = await router.handleCall(session);
+
+    expect(result.outcome).toBe("fallback");
+    expect(result.fallbackReason).toBe("no-speech");
+    expect(result.route).toBeUndefined();
+    expect(result.action).toEqual({ type: "continue" });
+    expect(session.executed).toEqual([{ type: "continue" }]);
   });
 
   test("a Jev failure falls back", async () => {
     const decider = { decide: async () => Promise.reject(new Error("503 from Jev")) };
-    const { result } = await fallbackFor({ decider });
+    const { result, session } = await fallbackFor({ decider });
     expect(result.fallbackReason).toBe("decision-failed");
+    expect(result.route).toBe("reception");
+    expect(session.executed).toEqual([{ type: "transfer", destination: "reception,300,1" }]);
     expect(result.error).toContain("503 from Jev");
   });
 
@@ -181,8 +233,10 @@ describe("fallback behavior", () => {
 
   test("a transcription failure falls back", async () => {
     const speech = { transcribe: async () => Promise.reject(new Error("STT down")) };
-    const { result } = await fallbackFor({ speech });
+    const { result, session } = await fallbackFor({ speech });
     expect(result.fallbackReason).toBe("speech-failed");
+    expect(result.route).toBe("reception");
+    expect(session.executed).toEqual([{ type: "transfer", destination: "reception,300,1" }]);
   });
 
   test("an interpreter failure falls back instead of sending the raw transcript", async () => {

@@ -27,7 +27,7 @@ This project takes a third path: separate understanding from execution.
 - Callers speak naturally instead of navigating a menu.
 - You define the acceptable outcomes as routes (name + description + action).
 - Jev answers a multiple-choice question: it picks one of those routes and returns a name plus a confidence score. It does not generate free-form text.
-- Low confidence, outages, timeouts, and unclear requests all go to a fallback you choose.
+- Low confidence, outages, timeouts, and unclear requests all go to a fallback you choose. You can also route by failure reason, for example hanging up on continuous silence.
 
 Because Jev's output is constrained to known routes, it cannot invent an extension, action, or command that does not exist. Anything outside the list is rejected as `invalid-decision` and routed to the fallback. It can still misread intent, but the blast radius is limited to the paths you wrote in `router.config.ts`.
 
@@ -95,7 +95,7 @@ routeDirectly() match ──▶ direct route (Jev is skipped)
   known route, and confidence ≥ minConfidence?
     ├─ no / needs more information → ask again (up to maxAttempts)
     └─ yes → execute the action
-  any stage fails → fallbackRoute → still failing → back to the dialplan
+  any stage fails → fallbackRoute (fallbackRouteByReason can override per reason) → still failing → back to the dialplan
 ```
 
 ## Quick start
@@ -151,7 +151,7 @@ interface Route {
 ```
 
 - Only routes **with a `description`** are offered to Jev.
-- Routes without one are reachable only through `routeDirectly()` or as the fallback.
+- Routes without one are reachable only through `routeDirectly()` or as the fallback (`fallbackRoute` / `fallbackRouteByReason`).
 - There are three action types:
 
 | Action | Effect |
@@ -186,9 +186,19 @@ export const routes: Record<string, Route> = {
   "after-hours": {
     action: { type: "continue" },
   },
+  // No description, so Jev never offers it; only fallbackRouteByReason uses it
+  hangup: {
+    action: { type: "hangup" },
+    announcement: "sound:custom/jev-no-speech",
+  },
 };
 
 export const fallbackRoute = "human-agent";
+
+// Continuous silence plays a prompt and hangs up; other reasons still use fallbackRoute
+export const fallbackRouteByReason = {
+  "no-speech": "hangup",
+};
 ```
 
 Add a deterministic override that never reaches Jev:
@@ -205,6 +215,7 @@ Rules:
 - Route names must match `^[a-z0-9][a-z0-9_-]*$`.
 - `need-more-information` and `no-matching-route` are reserved names.
 - `fallbackRoute` is required and must name a defined route.
+- `fallbackRouteByReason` keys must be valid failure reasons and must name defined routes, or startup fails.
 - At least one route needs a `description`, or startup fails.
 
 More complete configurations (VIP overrides, business hours, privacy summaries) live in [examples/routing-scenarios.ts](examples/routing-scenarios.ts).
@@ -315,7 +326,7 @@ ARI_APP=jev-router
 
 **Prompts**
 
-Put `jev-greeting`, `jev-retry`, and `jev-connecting` in `/var/lib/asterisk/sounds/custom/`. 8 kHz mono is the safe choice:
+Put `jev-greeting`, `jev-retry`, `jev-connecting`, and `jev-no-speech` in `/var/lib/asterisk/sounds/custom/`. 8 kHz mono is the safe choice:
 
 ```bash
 sox greeting-raw.wav -r 8000 -c 1 -b 16 /var/lib/asterisk/sounds/custom/jev-greeting.wav
@@ -357,7 +368,7 @@ FreePBX is Asterisk, so there is no FreePBX-specific code. Only the configuratio
 2. Paste `[jev-router]` into `extensions_custom.conf` and run `fwconsole reload`.
 3. Create a Custom Destination pointing at `jev-router,s,1`.
 4. Point the DIDs that should use Jev at that Custom Destination.
-5. Create the three prompts under System Recordings.
+5. Create the four prompts under System Recordings (`jev-greeting`, `jev-retry`, `jev-connecting`, `jev-no-speech`).
 6. Use FreePBX contexts as route destinations, such as `ext-queues,400,1`, `ext-group,600,1`, `from-did-direct,100,1`, or `ext-local,vmu100,1`.
 
 ### When it does not connect
@@ -372,14 +383,16 @@ Step-by-step setup and verification commands: [docs/INTEGRATION.md](docs/INTEGRA
 
 ## What happens when routing fails
 
-`fallbackRoute` is required, and every one of these lands on it:
+`fallbackRoute` is required, and every one of these lands on it (`fallbackRouteByReason` can point a specific reason at a different route):
 
-- **Speech**: no speech, STT failure, STT timeout (8 s)
+- **Speech**: no speech (the shipped config hangs up instead — see below), STT failure, STT timeout (8 s)
 - **Interpretation**: interpreter failure or timeout (6 s)
 - **Decision**: Jev failure or timeout (5 s), a route that was not offered, confidence below `minConfidence`, still needing more information after retries, or no matching route
 - **Execution**: a failed transfer, or a PBX error
 
 If the fallback action also fails, the router returns the call to the dialplan (`continue`) and your line after `Stasis()` takes over. If the caller hangs up along the way, nothing is executed.
+
+The shipped `router.config.ts` maps `no-speech` to the `hangup` route through `fallbackRouteByReason`: after continuous silence it plays `sound:custom/jev-no-speech` and hangs up instead of transferring to a human; every other reason still goes to `human-agent`. Hangup does not pass through the dialplan, so the safety net after `Stasis()` never triggers for it. If the hangup itself fails, the router still returns the call to the dialplan.
 
 Every call produces a `RoutingResult` with `outcome` (`jev` / `direct` / `fallback` / `caller-hung-up`), the chosen route, the fallback reason, Jev's choice and probabilities, attempt count, and per-stage timings.
 
@@ -470,6 +483,7 @@ interface CallInterpreter {
 |---|---|---|
 | `routes` | required | Your outcomes; only described routes are offered to Jev |
 | `fallbackRoute` | required | Route used whenever routing cannot complete safely |
+| `fallbackRouteByReason` | none | Route per failure reason; reasons without an entry still use `fallbackRoute` |
 | `prompts.greeting` | required | Audio played on the first attempt |
 | `prompts.retry` | same as greeting | Audio played when asking again |
 | `maxAttempts` | `2` | How many times to listen |
@@ -540,6 +554,8 @@ Set `WEBHOOK_URL` and every finished call sends a POST. `data` is the full `Rout
   }
 }
 ```
+
+Note the value domain of `data.route`: with `fallbackRouteByReason`, a fallback can land on routes like `hangup`; if the fallback action itself fails and the call returns to the dialplan, `route` is `undefined`. Consumers should not assume a fixed set of values.
 
 With `WEBHOOK_SECRET` set, requests carry an `X-Jev-Signature` header containing the HMAC-SHA256 hex digest of the raw body:
 

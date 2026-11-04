@@ -71,7 +71,7 @@ The copy-paste minimal setup lives in [README › 接上 Asterisk / FreePBX](../
    exten => 8000,1,Goto(jev-router,s,1)
    ```
 
-3. Record prompts: Put `jev-greeting`, `jev-retry`, and `jev-connecting` (WAV or ulaw) in `/var/lib/asterisk/sounds/custom/`. They are referenced as `sound:custom/jev-greeting`.
+3. Record prompts: Put `jev-greeting`, `jev-retry`, `jev-connecting`, and `jev-no-speech` (WAV or ulaw) in `/var/lib/asterisk/sounds/custom/`. They are referenced as `sound:custom/jev-greeting`.
 4. Reload and check:
 
    ```
@@ -90,7 +90,7 @@ FreePBX runs Asterisk, so it uses the same ARI adapter with no FreePBX-specific 
 2. Dialplan: Paste the `[jev-router]` context into `/etc/asterisk/extensions_custom.conf`, then run `fwconsole reload`.
 3. Custom Destination: Under Admin > Custom Destinations > Add, set target to `jev-router,s,1` and description to "Jev router".
 4. Inbound routes: In Connectivity > Inbound Routes, set the destination of DIDs using Jev to the "Jev router" Custom Destination. All other routes remain unchanged.
-5. Prompts: In Admin > System Recordings, create `jev-greeting`, `jev-retry`, and `jev-connecting`. FreePBX stores them under `custom/`, so they are referenced as `sound:custom/jev-greeting`.
+5. Prompts: In Admin > System Recordings, create `jev-greeting`, `jev-retry`, `jev-connecting`, and `jev-no-speech`. FreePBX stores them under `custom/`, so they are referenced as `sound:custom/jev-greeting`.
 6. Route destinations: In `router.config.ts`, route actions map to FreePBX contexts. On plain Asterisk, use your own contexts instead — see the destination table in the README.
 
    | FreePBX destination | Action destination |
@@ -112,6 +112,8 @@ The line after `Stasis()` in `[jev-router]` is the last-resort destination. The 
 - a route uses `{ type: "continue" }`, or
 - the router fails to execute both the chosen route and the fallback route.
 
+A `{ type: "hangup" }` action never passes through the dialplan, so the last-resort destination does not run for it. If the hangup itself fails, the router returns the call with `continue` and the dialplan takes over.
+
 Point this destination at an attended extension or staffed queue.
 
 ## Application configuration
@@ -130,8 +132,13 @@ export const routes: Record<string, Route> = {
     announcement: "sound:custom/jev-connecting",
   },
   "standard-ivr": { action: { type: "continue" } },
+  hangup: {
+    action: { type: "hangup" },
+    announcement: "sound:custom/jev-no-speech",
+  },
 };
 export const fallbackRoute = "human-agent";
+export const fallbackRouteByReason = { "no-speech": "hangup" };
 ```
 
 Options on `createCallRouter`:
@@ -140,6 +147,7 @@ Options on `createCallRouter`:
 |---|---|---|
 | `routes` | required | Your outcomes. Only routes with `description` are offered to Jev |
 | `fallbackRoute` | required | Route used whenever routing cannot complete safely |
+| `fallbackRouteByReason` | none | Route per failure reason; reasons without an entry still use `fallbackRoute`. The shipped config sends `no-speech` (continuous silence) to the `hangup` route |
 | `prompts.greeting` / `prompts.retry` | greeting required, retry defaults to greeting | PBX media played before listening |
 | `maxAttempts` | `2` | How many times to listen before falling back |
 | `minConfidence` | `0.7` | Jev confidence required to act; tune on your own calls |

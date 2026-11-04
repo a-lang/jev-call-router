@@ -1,4 +1,4 @@
-import { fallbackRoute, prompts, routes } from "../router.config.ts";
+import { fallbackRoute, fallbackRouteByReason, prompts, routes } from "../router.config.ts";
 import {
   createCallRouter,
   createJevDecider,
@@ -19,6 +19,7 @@ const router = createCallRouter({
   speech: textSpeech,
   routes,
   fallbackRoute,
+  fallbackRouteByReason,
   prompts,
   logger: createJsonLogger(console.error),
 });

@@ -83,6 +83,12 @@ export function createCallRouter(config: CallRouterConfig): CallRouter {
   const minConfidence = config.minConfidence ?? DEFAULT_MIN_CONFIDENCE;
   const offeredRoutes = jevRouteNames(config.routes);
 
+  // Resolve the fallback route for a reason, honoring per-reason overrides;
+  // reasons without an override still use fallbackRoute.
+  function fallbackRouteFor(reason: FallbackReason): string {
+    return config.fallbackRouteByReason?.[reason] ?? config.fallbackRoute;
+  }
+
   async function handleCall(session: CallSession): Promise<RoutingResult> {
     const trace = startTrace(session.call);
     logger.info("call.started", { callId: trace.call.id });
@@ -266,7 +272,7 @@ export function createCallRouter(config: CallRouterConfig): CallRouter {
     step: FinalStep,
     trace: Trace,
   ): Promise<RoutingResult> {
-    const route = step.kind === "route" ? step.route : config.fallbackRoute;
+    const route = step.kind === "route" ? step.route : fallbackRouteFor(step.reason);
     if (step.kind === "route") {
       eventHub.emit("call.routed", {
         callId: trace.call.id,
@@ -280,8 +286,8 @@ export function createCallRouter(config: CallRouterConfig): CallRouter {
       eventHub.emit("call.fallback", {
         callId: trace.call.id,
         reason: step.reason,
-        route: config.fallbackRoute,
-        destination: config.routes[config.fallbackRoute]?.action,
+        route,
+        destination: config.routes[route]?.action,
         error: step.error,
       });
     }
@@ -311,9 +317,10 @@ export function createCallRouter(config: CallRouterConfig): CallRouter {
       decision: original.decision,
       error: describeError(cause),
     };
-    if (failedRoute !== config.fallbackRoute) {
+    const fallback = fallbackRouteFor(reason);
+    if (failedRoute !== fallback) {
       try {
-        await executeRoute(session, config.fallbackRoute);
+        await executeRoute(session, fallback);
         return buildResult(trace, step);
       } catch (error) {
         if (error instanceof CallEndedError) {
@@ -321,7 +328,7 @@ export function createCallRouter(config: CallRouterConfig): CallRouter {
         }
         logger.error("action.failed", {
           callId: trace.call.id,
-          route: config.fallbackRoute,
+          route: fallback,
           error: describeError(error),
         });
       }
@@ -372,7 +379,7 @@ export function createCallRouter(config: CallRouterConfig): CallRouter {
   }
 
   function buildResult(trace: Trace, step: FinalStep): RoutingResult {
-    const route = step.kind === "route" ? step.route : config.fallbackRoute;
+    const route = step.kind === "route" ? step.route : fallbackRouteFor(step.reason);
     return {
       callId: trace.call.id,
       outcome: step.kind === "route" ? step.source : "fallback",

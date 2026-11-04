@@ -94,6 +94,7 @@ export interface CallRouterConfig {
   interpreter?: CallInterpreter;
   routes: Record<string, Route>;
   fallbackRoute: string;
+  fallbackRouteByReason?: Partial<Record<FallbackReason, string>>;
   prompts: { greeting: string; retry?: string };
   maxAttempts?: number;
   minConfidence?: number;

@@ -28,7 +28,12 @@ function start(): void {
       maxSilenceSeconds: envNumber("RECORD_MAX_SILENCE_SECONDS", DEFAULT_RECORDING.maxSilenceSeconds),
     },
   });
-  logger.info("service.started", { app, routes: Object.keys(config.routes), fallbackRoute: config.fallbackRoute });
+  logger.info("service.started", {
+    app,
+    routes: Object.keys(config.routes),
+    fallbackRoute: config.fallbackRoute,
+    fallbackRouteByReason: config.fallbackRouteByReason ?? {},
+  });
 
   const stop = () => {
     logger.info("service.stopping");

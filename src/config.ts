@@ -1,10 +1,34 @@
-import type { CallRouterConfig, Route, Timeouts } from "./types.ts";
+import type { CallRouterConfig, FallbackReason, Route, Timeouts } from "./types.ts";
 
 export const NEED_MORE_INFORMATION = "need-more-information";
 export const NO_MATCHING_ROUTE = "no-matching-route";
 
 const RESERVED_ROUTE_NAMES = [NEED_MORE_INFORMATION, NO_MATCHING_ROUTE];
 const ROUTE_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
+
+// Runtime mirror of the FallbackReason union: fallbackRouteByReason is runtime
+// config, so a typo'd key would otherwise fail silently and never match.
+const FALLBACK_REASON_NAMES = [
+  "no-speech",
+  "speech-failed",
+  "interpreter-failed",
+  "decision-failed",
+  "timeout",
+  "invalid-decision",
+  "low-confidence",
+  "need-more-information",
+  "no-matching-route",
+  "unknown-route",
+  "action-failed",
+  "pbx-error",
+] as const satisfies readonly FallbackReason[];
+
+// Compile-time exhaustiveness: errors here if FallbackReason gains a member
+// missing from FALLBACK_REASON_NAMES above (the satisfies check only catches extras).
+type MissingFallbackReason<T extends never> = T;
+type AllFallbackReasonsListed = MissingFallbackReason<
+  Exclude<FallbackReason, (typeof FALLBACK_REASON_NAMES)[number]>
+>;
 
 export const DEFAULT_TIMEOUTS: Timeouts = {
   speechMs: 8000,
@@ -35,6 +59,16 @@ export function validateConfig(config: CallRouterConfig): void {
   }
   if (!config.routes[config.fallbackRoute]) {
     throw new ConfigError(`fallbackRoute "${config.fallbackRoute}" is not a defined route.`);
+  }
+  for (const [reason, route] of Object.entries(config.fallbackRouteByReason ?? {})) {
+    if (!(FALLBACK_REASON_NAMES as readonly string[]).includes(reason)) {
+      throw new ConfigError(`fallbackRouteByReason.${reason} is not a known fallback reason.`);
+    }
+    if (route === undefined || !config.routes[route]) {
+      throw new ConfigError(
+        `fallbackRouteByReason.${reason} "${route}" is not a defined route.`,
+      );
+    }
   }
   if (!config.prompts.greeting.trim()) {
     throw new ConfigError("prompts.greeting is required.");
