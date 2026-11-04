@@ -74,24 +74,24 @@ Where it sits:
 
 ```
 Caller ──▶ PBX (Asterisk / FreePBX)
-             │ Stasis(jev-router)
-             ▼
-       jev-call-router ──▶ speech-to-text ──▶ Jev (classification only)
-             │                                  │
-             └──── execute your action ◀─────────┘
-                     transfer / continue / hang up
+           │ Stasis(jev-router)
+           ▼
+           jev-call-router ──▶ speech-to-text ──▶ Jev (classification only)
+           │                                      │
+           └──── execute your action ◀────────────┘
+                 transfer / continue / hang up
 ```
 
 The decision path:
 
 ```
 routeDirectly() match ──▶ direct route (Jev is skipped)
-        │none
-        ▼
+  │ none
+  ▼
   play greeting → record → speech-to-text
-        ▼
+  ▼
   Jev chooses one of your routes
-        ▼
+  ▼
   known route, and confidence ≥ minConfidence?
     ├─ no / needs more information → ask again (up to maxAttempts)
     └─ yes → execute the action

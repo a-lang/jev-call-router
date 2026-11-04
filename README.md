@@ -74,24 +74,24 @@ Jev 只回傳「這是哪一類」與信心分數，不碰 PBX。你能執行的
 
 ```
 來電 ──▶ PBX（Asterisk / FreePBX）
-            │ Stasis(jev-router)
-            ▼
-      jev-call-router ──▶ 語音轉文字 ──▶ Jev（只回傳分類）
-            │                                │
-            └──── 執行你定義的 action ◀──────┘
-                   轉接 / 回 dialplan / 掛斷
+         │ Stasis(jev-router)
+         ▼
+         jev-call-router ──▶ 語音轉文字 ──▶ Jev（只回傳分類）
+         │                                  │
+         └──── 執行你定義的 action ◀────────┘
+               轉接 / 回 dialplan / 掛斷
 ```
 
 決策路徑：
 
 ```
 routeDirectly() 命中 ──▶ 直接路由（不呼叫 Jev）
-        │沒有
-        ▼
+  │ 沒有
+  ▼
   播放問候 → 錄音 → 語音轉文字
-        ▼
+  ▼
   Jev 從你定義的 routes 中選一個
-        ▼
+  ▼
   是已知 route，且信心 ≥ minConfidence？
     ├─ 否 / 需要更多資訊 → 重問（最多 maxAttempts）
     └─ 是 → 執行動作
