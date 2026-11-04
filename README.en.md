@@ -263,23 +263,110 @@ STT_MODEL=scribe_v2
 
 In one sentence: the dialplan hands the call to `Stasis(jev-router)`; the router answers, plays prompts, records, decides, and uses ARI `continue` to resume the dialplan at your chosen destination.
 
-**Asterisk**
+### Asterisk: minimal working setup
 
-1. Enable the HTTP server and ARI (examples: `examples/asterisk/http.conf`, `ari.conf`).
-2. Add the `[jev-router]` context from `examples/asterisk/extensions_custom.conf`.
-3. Put `jev-greeting`, `jev-retry`, and `jev-connecting` in `/var/lib/asterisk/sounds/custom/`.
-4. Run `dialplan reload`, then `bun start`.
+Copy the blocks below. The corresponding files live in [`examples/asterisk/`](examples/asterisk/).
 
-**FreePBX**
+**`/etc/asterisk/http.conf`**
+
+```ini
+[general]
+enabled = yes
+bindaddr = 127.0.0.1
+bindport = 8088
+```
+
+**`/etc/asterisk/ari.conf`**
+
+```ini
+[general]
+enabled = yes
+pretty = no
+
+[jev]
+type = user
+read_only = no                       ; answer / play / record need write access
+password = use a long random value   ; openssl rand -hex 24
+```
+
+**`/etc/asterisk/extensions.conf`**
+
+```ini
+[jev-router]
+exten => s,1,NoOp(Jev routing for ${CALLERID(num)})
+ same => n,Stasis(jev-router,line=main)
+ same => n,NoOp(Stasis returned: ${STASISSTATUS})
+ same => n,Goto(internal,100,1)      ; last resort when the router does not take the call
+
+[from-pstn]
+exten => 8000,1,Goto(jev-router,s,1)
+```
+
+The line after `Stasis()` is the last-resort destination: the call lands there when the router is not running, the connection drops, or a route action fails. Any `key=value` arguments you pass to `Stasis()` become `call.variables`, which `routeDirectly` can read.
+
+**`.env`**
+
+```ini
+ARI_URL=http://127.0.0.1:8088
+ARI_USERNAME=jev
+ARI_PASSWORD=<the password from ari.conf>
+ARI_APP=jev-router
+```
+
+**Prompts**
+
+Put `jev-greeting`, `jev-retry`, and `jev-connecting` in `/var/lib/asterisk/sounds/custom/`. 8 kHz mono is the safe choice:
+
+```bash
+sox greeting-raw.wav -r 8000 -c 1 -b 16 /var/lib/asterisk/sounds/custom/jev-greeting.wav
+```
+
+`router.config.ts` references them as `sound:custom/jev-greeting`, without an extension.
+
+**Reload and verify**
+
+```bash
+asterisk -rx "module reload res_ari.so"
+asterisk -rx "dialplan reload"
+asterisk -rx "http show status"     # ARI should be mounted at /ari
+asterisk -rx "ari show users"       # should list jev
+
+bun start
+
+asterisk -rx "ari show apps"        # should show jev-router
+```
+
+### Destinations on plain Asterisk
+
+The default destinations in `router.config.ts` are FreePBX contexts. Plain Asterisk has no `ext-queues` or `from-did-direct`, so every route will fail to transfer and fall back to `fallbackRoute` until you point them at your own contexts.
+
+| Destination | Plain Asterisk | FreePBX |
+|---|---|---|
+| Extension 100 | `internal,100,1` | `from-did-direct,100,1` |
+| Queue 400 | `queues,400,1` | `ext-queues,400,1` |
+| Ring group 600 | your own context | `ext-group,600,1` |
+| Voicemail of 100 | `internal,vm100,1` | `ext-local,vmu100,1` |
+
+`internal` and `queues` above are placeholders. Confirm yours with `asterisk -rx "dialplan show <context>"`.
+
+### FreePBX
 
 FreePBX is Asterisk, so there is no FreePBX-specific code. Only the configuration locations differ:
 
-1. Confirm the mini-HTTP server and ARI are enabled.
+1. Confirm the mini-HTTP server and ARI are enabled under Settings > Advanced Settings. Do not edit `ari.conf` directly; put custom users in `ari_additional_custom.conf`.
 2. Paste `[jev-router]` into `extensions_custom.conf` and run `fwconsole reload`.
 3. Create a Custom Destination pointing at `jev-router,s,1`.
 4. Point the DIDs that should use Jev at that Custom Destination.
 5. Create the three prompts under System Recordings.
 6. Use FreePBX contexts as route destinations, such as `ext-queues,400,1`, `ext-group,600,1`, `from-did-direct,100,1`, or `ext-local,vmu100,1`.
+
+### When it does not connect
+
+| Symptom | Check first |
+|---|---|
+| Call drops to the fallback immediately | `ari show apps` does not list `jev-router`, so `bun start` never connected: check `ARI_USERNAME`, `ARI_PASSWORD`, `ARI_APP`, and reachability of port 8088 |
+| Recording works but the transfer fails | The destination context or extension does not exist; confirm with `dialplan show <context>` |
+| Playback fails | The prompt is missing from `/var/lib/asterisk/sounds/custom/`, or the format is wrong |
 
 Step-by-step setup and verification commands: [docs/INTEGRATION.md](docs/INTEGRATION.md).
 

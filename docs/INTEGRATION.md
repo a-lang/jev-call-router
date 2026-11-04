@@ -59,6 +59,8 @@ The router's host needs outbound HTTPS to `api.typesafe.ai`, your STT host (`api
 
 ## PBX configuration
 
+The copy-paste minimal setup lives in [README › 接上 Asterisk / FreePBX](../README.md#接上-asterisk--freepbx). This section is the full walkthrough, including the FreePBX specifics.
+
 ### Plain Asterisk
 
 1. Enable the HTTP server and ARI: See [`examples/asterisk/http.conf`](../examples/asterisk/http.conf) and [`examples/asterisk/ari.conf`](../examples/asterisk/ari.conf). Bind to `127.0.0.1` if the router runs on the same host. Otherwise bind to a private interface and enable TLS.
@@ -89,7 +91,7 @@ FreePBX runs Asterisk, so it uses the same ARI adapter with no FreePBX-specific 
 3. Custom Destination: Under Admin > Custom Destinations > Add, set target to `jev-router,s,1` and description to "Jev router".
 4. Inbound routes: In Connectivity > Inbound Routes, set the destination of DIDs using Jev to the "Jev router" Custom Destination. All other routes remain unchanged.
 5. Prompts: In Admin > System Recordings, create `jev-greeting`, `jev-retry`, and `jev-connecting`. FreePBX stores them under `custom/`, so they are referenced as `sound:custom/jev-greeting`.
-6. Route destinations: In `router.config.ts`, route actions map to FreePBX contexts:
+6. Route destinations: In `router.config.ts`, route actions map to FreePBX contexts. On plain Asterisk, use your own contexts instead — see the destination table in the README.
 
    | FreePBX destination | Action destination |
    |---|---|

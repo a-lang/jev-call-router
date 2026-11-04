@@ -262,23 +262,110 @@ STT_MODEL=scribe_v2
 
 一句話：dialplan 把通話交給 `Stasis(jev-router)`，router 應答、播音、錄音、判斷，最後用 ARI 的 `continue` 回到你指定的 dialplan 位置。
 
-**Asterisk**
+### Asterisk：最小可運作設定
 
-1. 啟用 HTTP server 與 ARI（範例：`examples/asterisk/http.conf`、`ari.conf`）。
-2. 加入 `examples/asterisk/extensions_custom.conf` 的 `[jev-router]` context。
-3. 把 `jev-greeting`、`jev-retry`、`jev-connecting` 放進 `/var/lib/asterisk/sounds/custom/`。
-4. `dialplan reload` 後執行 `bun start`。
+以下設定可以直接複製；對應的完整檔案在 [`examples/asterisk/`](examples/asterisk/)。
 
-**FreePBX**
+**`/etc/asterisk/http.conf`**
+
+```ini
+[general]
+enabled = yes
+bindaddr = 127.0.0.1
+bindport = 8088
+```
+
+**`/etc/asterisk/ari.conf`**
+
+```ini
+[general]
+enabled = yes
+pretty = no
+
+[jev]
+type = user
+read_only = no                       ; 需要 answer / play / record，不能唯讀
+password = 換成長一點的隨機字串         ; openssl rand -hex 24
+```
+
+**`/etc/asterisk/extensions.conf`**
+
+```ini
+[jev-router]
+exten => s,1,NoOp(Jev routing for ${CALLERID(num)})
+ same => n,Stasis(jev-router,line=main)
+ same => n,NoOp(Stasis returned: ${STASISSTATUS})
+ same => n,Goto(internal,100,1)      ; 保底：router 沒接手時的目的地
+
+[from-pstn]
+exten => 8000,1,Goto(jev-router,s,1)
+```
+
+`Stasis()` 的下一行是保底目的地：router 沒在跑、連線中斷，或 route 動作執行失敗時，通話會落到這裡。`Stasis()` 後面接的 `key=value` 會變成 `call.variables`，可用於 `routeDirectly`。
+
+**`.env`**
+
+```ini
+ARI_URL=http://127.0.0.1:8088
+ARI_USERNAME=jev
+ARI_PASSWORD=<ari.conf 裡設定的密碼>
+ARI_APP=jev-router
+```
+
+**提示音**
+
+把 `jev-greeting`、`jev-retry`、`jev-connecting` 放進 `/var/lib/asterisk/sounds/custom/`。建議轉成 8 kHz 單聲道：
+
+```bash
+sox greeting-raw.wav -r 8000 -c 1 -b 16 /var/lib/asterisk/sounds/custom/jev-greeting.wav
+```
+
+`router.config.ts` 以 `sound:custom/jev-greeting` 引用，不加副檔名。
+
+**重新載入與檢查**
+
+```bash
+asterisk -rx "module reload res_ari.so"
+asterisk -rx "dialplan reload"
+asterisk -rx "http show status"     # ARI 應掛在 /ari
+asterisk -rx "ari show users"       # 應看到 jev
+
+bun start
+
+asterisk -rx "ari show apps"        # 應出現 jev-router
+```
+
+### 純 Asterisk 的 destination
+
+`router.config.ts` 的預設 destination 是 FreePBX 的 context。純 Asterisk 沒有 `ext-queues`、`from-did-direct`，要改成你自己的 context，否則每條 route 都會轉接失敗並落到 `fallbackRoute`。
+
+| 要去的地方 | 純 Asterisk | FreePBX |
+|---|---|---|
+| 分機 100 | `internal,100,1` | `from-did-direct,100,1` |
+| Queue 400 | `queues,400,1` | `ext-queues,400,1` |
+| 響鈴群組 600 | 自行定義 context | `ext-group,600,1` |
+| 分機 100 的語音信箱 | `internal,vm100,1` | `ext-local,vmu100,1` |
+
+表中的 `internal`、`queues` 是範例，換成你實際的 context。用 `asterisk -rx "dialplan show <context>"` 確認目標存在。
+
+### FreePBX
 
 FreePBX 就是 Asterisk，沒有專屬程式碼。差異只在設定位置：
 
-1. 確認 mini-HTTP server 與 ARI 已啟用。
+1. 在 Settings > Advanced Settings 確認 mini-HTTP server 與 ARI 已啟用。不要直接改 `ari.conf`；要自訂使用者時寫在 `ari_additional_custom.conf`。
 2. 把 `[jev-router]` 貼進 `extensions_custom.conf`，執行 `fwconsole reload`。
 3. 建一個 Custom Destination 指向 `jev-router,s,1`。
 4. 把要使用 Jev 的 DID 目的地設成這個 Custom Destination。
 5. 在 System Recordings 建立三個提示音。
 6. route 目的地使用 FreePBX context，例如 `ext-queues,400,1`、`ext-group,600,1`、`from-did-direct,100,1`、`ext-local,vmu100,1`。
+
+### 接不起來時先看這裡
+
+| 症狀 | 先查 |
+|---|---|
+| 來電立刻回保底 | `ari show apps` 沒有 `jev-router`，代表 `bun start` 沒連上：檢查 `ARI_USERNAME`、`ARI_PASSWORD`、`ARI_APP` 與 8088 連通性 |
+| 有錄音但轉接失敗 | destination 的 context 或 extension 不存在，用 `dialplan show <context>` 確認 |
+| 播音失敗 | 音檔不在 `/var/lib/asterisk/sounds/custom/`，或格式不對 |
 
 逐步設定與檢查指令見 [docs/INTEGRATION.md](docs/INTEGRATION.md)。
 
