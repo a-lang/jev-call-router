@@ -1,228 +1,489 @@
 # jev-call-router
 
-A small TypeScript service and library that uses [Jev by TypeSafe AI](https://typesafe.ai) as the decision layer for phone calls. It sits between a PBX (such as Asterisk or FreePBX) and your call destinations, classifying caller intent to decide PBX actions.
+<p align="center">
+  <img src="docs/cover.zh-TW.png" alt="jev-call-router：智慧分流，不該靠按鍵" width="100%">
+</p>
 
-Jev never controls the PBX directly. You define the allowed outcomes, this project maps each outcome to an explicit call action, and the PBX executes it.
+<p align="center">
+  <strong>繁體中文</strong> · <a href="README.en.md">English</a>
+</p>
 
-## The problem it solves
+**讓來電者說一句話，就能接到正確的佇列或分機。**
 
-Traditional IVRs require callers to navigate numeric keypads, while letting an LLM control PBX actions directly risks arbitrary commands. This project uses Jev to classify caller intent into predefined routes:
+jev-call-router 是一個 TypeScript 服務與函式庫：把電話語音轉成文字，交給 [Jev by TypeSafe AI](https://typesafe.ai) 判斷意圖，再由你的 PBX 執行一個你事先定義好的動作。
 
-- Callers speak naturally.
-- Jev selects from defined routes and returns a typed answer with a confidence score.
-- Low confidence, outages, or unhandled requests route to a designated fallback.
+Jev 只回傳「這是哪一類」與信心分數，不碰 PBX。你能執行的動作只有三種：轉接、回到 dialplan、掛斷。
 
-## Demo
+`Bun 1.3+` · `TypeScript` · `MIT` · `Asterisk / FreePBX`
 
-Jev handling 10 incoming calls simultaneously in real time, classifying caller intent across active lanes and routing each to its target queue:
+---
 
-[<video src="docs/demo.mp4" controls width="100%"></video>](https://github.com/user-attachments/assets/55f709fb-32ef-410b-b138-8155e08af879)
+## 這是什麼
 
-## Call flow
+傳統 IVR 要求來電者記住按鍵；讓 LLM 直接控制交換機，則等於把任意指令的入口交給一個會自由生成內容的模型。
+
+這個專案走第三條路：把「理解」和「執行」分開。
+
+- 來電者自然說話，不需要記選單。
+- 你把可接受的結果定義成 routes（名稱 + 描述 + 動作）。
+- Jev 只做選擇題：從這份清單裡挑一個，回傳路由名稱與信心分數，不生成自由文字。
+- 信心不足、服務中斷、逾時、聽不懂，一律走你指定的 fallback。
+
+因為 Jev 的輸出被限制在已知的 routes 內，它不會編造出一個不存在的分機、動作或指令。清單外的值會被判為 `invalid-decision` 並直接 fallback。它仍可能判斷錯意圖，但錯誤的影響範圍就是你事先寫在 `router.config.ts` 裡的那幾條路徑。
+
+> **邊界很清楚**：Jev 不會產生 dialplan、不會決定分機號碼、也不會呼叫 ARI。所有可執行的動作都由你事先定義。
+
+一句話版本：把 IVR 的按鍵換成自然語言，但保留 IVR 的可預測性。
+
+## 什麼情況適合
+
+這個專案不是通用語音助理。適不適合，主要取決於你的來電能不能事先分類，以及你願不願意讓 PBX 保留最後的執行權。
+
+| 情境 | 判斷 | 原因 |
+|---|---|---|
+| 已經有 Asterisk / FreePBX，想用自然語言取代多層 IVR | 適合 | 直接接 ARI；可以先讓一條 DID 走 Jev，不必一次換掉整個總機 |
+| 來電意圖可以事先列舉（訂單、退換貨、帳務、真人） | 適合 | Jev 只能從你給的清單選；3–6 類最容易維持穩定，更多類別需要自行驗證 |
+| 需要 VIP、營業時間、特定號碼直通 | 適合 | `routeDirectly()` 在 Jev 之前執行，這些規則不會被模型改寫 |
+| 想把結果送進 CRM、工單或 dashboard | 適合 | 每通電話都有 `RoutingResult`、webhook 與 SSE 事件 |
+| 需要多輪自由對話、打斷、即時串流語音 | 不適合 | 流程是「播放 → 錄音 → 判斷」，一次處理一段話，不是持續對話 |
+| 想讓模型直接執行任意 PBX 指令 | 不適合 | 設計上只允許你定義的 routes 與三種 action |
+| 要求完全離線或毫秒級延遲 | 不適合 | 需要外部 STT 與 Jev API，無法離線，也壓不到毫秒級 |
+| 沒有電話系統，只想做網站 chatbot | 不適合 | 這是 PBX 前的分流層，不是對話機器人框架 |
+
+實際適合的場景：
+
+- **電商客服**：訂單進度、退換貨、商品諮詢、真人客服
+- **SaaS 客服台**：業務、技術支援、帳務、真人
+- **中小企業總機**：預約、報價、售後、櫃檯
+- **任何「按鍵選單已經長到沒人想聽完」的來電流程**
+
+## 和傳統 IVR、LLM agent 的差別
+
+| | 傳統 IVR | LLM 直接控制 PBX | jev-call-router |
+|---|---|---|---|
+| 來電者體驗 | 記按鍵、聽長選單 | 自然對話 | 自然說一句話 |
+| 動作範圍 | 固定選單 | 模型可能產生任意指令 | 只能執行你定義的 route |
+| 失敗處理 | 重聽或掛斷 | 難以預測 | 明確的 fallback 與原因碼 |
+| 可觀測性 | 低 | 視實作而定 | 每次通話都有結構化結果與事件 |
+| 幻覺風險 | 無模型 | 可能編造不存在的指令 | 只能從 routes 選，未知值直接拒絕 |
+| 維護 | 改選單就要改流程 | 要不斷調 prompt | 改一份 routes 設定 |
+
+## 一通電話會發生什麼
+
+系統位置：
 
 ```
-Incoming call → Asterisk / FreePBX dialplan → Stasis(jev-router)
-      ↓
-  routeDirectly(call)?  ── yes ──→ your deterministic route (Jev is skipped)
-      ↓ no
-  play greeting → record caller → speech-to-text
-      ↓
-  (optional) interpreter → short summary without personal details
-      ↓
-  Jev: choose one of { your described routes, need-more-information, no-matching-route }
-      ↓
-  validate: known route? confidence ≥ minConfidence?
-      ├─ need more info / low confidence → ask again (up to maxAttempts)
-      ├─ invalid / failure / timeout     → fallbackRoute
-      └─ ok                              → route.action
-      ↓
-  PBX executes: transfer to a dialplan destination, continue in the dialplan, or hang up
-      ↓
-  onResult(result) ──▶ outbound webhook (optional) + live visualizer event
+來電 ──▶ PBX（Asterisk / FreePBX）
+            │ Stasis(jev-router)
+            ▼
+      jev-call-router ──▶ 語音轉文字 ──▶ Jev（只回傳分類）
+            │                                │
+            └──── 執行你定義的 action ◀──────┘
+                   轉接 / 回 dialplan / 掛斷
 ```
 
-## Architecture
+決策路徑：
+
+```
+routeDirectly() 命中 ──▶ 直接路由（不呼叫 Jev）
+        │沒有
+        ▼
+  播放問候 → 錄音 → 語音轉文字
+        ▼
+  Jev 從你定義的 routes 中選一個
+        ▼
+  是已知 route，且信心 ≥ minConfidence？
+    ├─ 否 / 需要更多資訊 → 重問（最多 maxAttempts）
+    └─ 是 → 執行動作
+  任何階段失敗 → fallbackRoute → 仍失敗 → 回 dialplan
+```
+
+## 快速開始
+
+需求：
+
+- [Bun](https://bun.sh) 1.3+
+- TypeSafe API key（Jev）
+- 語音轉文字服務：任何 OpenAI 相容的 `/audio/transcriptions`，或 ElevenLabs Scribe
+- Asterisk 16+ 或 FreePBX 16/17（只有要接真電話時需要）
+
+### 第 1 步：看視覺化 demo（不需要 PBX、不需要 STT）
+
+```bash
+git clone https://github.com/rayanweragala/jev-call-router
+cd jev-call-router
+bun install
+cp .env.example .env       # 填入 TYPESAFE_API_KEY
+bun run demo               # http://localhost:3000
+```
+
+你會看到 10 條來電線路、5 個目的佇列，以及每通電話從 Ringing → Transcribing → Classifying → 路由的過程。頁面透過 SSE 接真實路由事件；沒有事件時會自動切到瀏覽器內的模擬模式。
+
+### 第 2 步：用文字模擬一通電話（真的呼叫 Jev）
+
+```bash
+bun run simulate "我上週訂的耳機還沒到"
+bun run simulate "我要退貨" "訂單編號 A12345"
+```
+
+第二句會回答重試提示。輸出包含 `played`（播放了哪些語音）、`executed`（執行了哪個動作）與完整的 `result`。
+
+### 第 3 步：接上電話系統
+
+補齊 `.env` 的 ARI 與 STT 設定，然後：
+
+```bash
+bun start
+```
+
+這會同時啟動 ARI 連線與 HTTP 服務（視覺化與 SSE，預設 `http://localhost:3000`）。Asterisk 與 FreePBX 的完整設定步驟見 [docs/INTEGRATION.md](docs/INTEGRATION.md)。
+
+## 定義你的 routes
+
+一個 route 就是三個欄位：
+
+```ts
+interface Route {
+  description?: string;   // 給 Jev 看的判斷依據
+  action: CallAction;     // 真正執行的動作
+  announcement?: string;  // 執行前先播放的語音（可選）
+}
+```
+
+- 只有**有 `description`** 的 route 會被提供給 Jev。
+- 沒有 `description` 的 route 只能透過 `routeDirectly()` 或作為 fallback 進入。
+- `action` 只有三種：
+
+| 動作 | 效果 |
+|---|---|
+| `{ type: "transfer", destination: "context,extension,priority" }` | 把通道交回 dialplan 的指定位置 |
+| `{ type: "continue" }` | 從 `Stasis()` 的下一行繼續執行 |
+| `{ type: "hangup" }` | 掛斷 |
+
+### 範例：電商平台客服總機
+
+把下面這段放進 `router.config.ts`，換掉預設的 routes 即可：
+
+```ts
+export const routes: Record<string, Route> = {
+  "order-status": {
+    description: "查詢訂單進度、出貨狀態或配送異常。",
+    action: { type: "transfer", destination: "ext-queues,300,1" },
+  },
+  returns: {
+    description: "辦理退貨、換貨或詢問退款進度。",
+    action: { type: "transfer", destination: "ext-queues,301,1" },
+  },
+  product: {
+    description: "詢問商品規格、尺寸、庫存或到貨時間。",
+    action: { type: "transfer", destination: "ext-queues,302,1" },
+  },
+  "human-agent": {
+    description: "想直接找真人客服。",
+    action: { type: "transfer", destination: "from-did-direct,100,1" },
+  },
+  "after-hours": {
+    action: { type: "continue" },
+  },
+};
+
+export const fallbackRoute = "human-agent";
+```
+
+搭配一條不經過 Jev 的直通規則：
+
+```ts
+routeDirectly: (call) =>
+  call.variables.jev === "off" ? "after-hours" : undefined,
+```
+
+`after-hours` 沒有 `description`，所以 Jev 看不到它；只有當 dialplan 傳來 `jev=off` 時才會被選中。這就是「可預測性優先」的用法。
+
+規則：
+
+- route 名稱必須符合 `^[a-z0-9][a-z0-9_-]*$`。
+- `need-more-information` 與 `no-matching-route` 是保留名稱。
+- `fallbackRoute` 必填，而且必須是已定義的 route。
+- 至少一個 route 要有 `description`，否則啟動時會直接報錯。
+
+更多完整設定（VIP 直通、營業時間、隱私摘要）見 [examples/routing-scenarios.ts](examples/routing-scenarios.ts)。
+
+## 環境變數
+
+完整範例見 [.env.example](.env.example)。
+
+**Jev**
+
+| 變數 | 必填 | 說明 |
+|---|---|---|
+| `TYPESAFE_API_KEY` | 是 | Jev API key |
+| `TYPESAFE_DEFAULT_MODEL` | 否 | 固定模型版本（SDK 預設 `jev-latest`） |
+
+**語音轉文字**
+
+| 變數 | 必填 | 說明 |
+|---|---|---|
+| `STT_API_KEY` | 是 | STT 服務金鑰 |
+| `STT_BASE_URL` | 是 | OpenAI 相容服務填到 `/v1`，例如 `https://api.openai.com/v1` |
+| `STT_MODEL` | 是 | 轉錄模型名稱 |
+| `STT_PROVIDER` | 否 | 設為 `elevenlabs` 時改用 ElevenLabs Scribe |
+| `STT_LANGUAGE` | 否 | ISO-639-1 語言提示，例如 `zh` |
+| `STT_DEBUG` | 否 | `1` 或 `true` 時把轉錄結果印到終端機 |
+
+ElevenLabs 設定：
+
+```bash
+STT_PROVIDER=elevenlabs
+STT_BASE_URL=https://api.elevenlabs.io
+STT_MODEL=scribe_v2
+```
+
+**Asterisk（只有 `bun start` 需要）**
+
+| 變數 | 必填 | 說明 |
+|---|---|---|
+| `ARI_URL` | 是 | 例如 `http://127.0.0.1:8088` |
+| `ARI_USERNAME` | 是 | ARI 使用者 |
+| `ARI_PASSWORD` | 是 | ARI 密碼 |
+| `ARI_APP` | 否 | Stasis app 名稱（預設 `jev-router`） |
+| `RECORD_MAX_SECONDS` | 否 | 單次錄音上限秒數（預設 `15`） |
+| `RECORD_MAX_SILENCE_SECONDS` | 否 | 靜音幾秒後停止錄音（預設 `2`） |
+
+**選用**
+
+| 變數 | 說明 |
+|---|---|
+| `ANTHROPIC_API_KEY` | 啟用 Claude interpreter 時需要 |
+| `WEBHOOK_URL` | 每通電話結束後 POST 路由結果 |
+| `WEBHOOK_SECRET` | 用 HMAC-SHA256 簽署 webhook |
+| `PORT` | HTTP 服務埠（預設 `3000`） |
+
+## 接上 Asterisk / FreePBX
+
+一句話：dialplan 把通話交給 `Stasis(jev-router)`，router 應答、播音、錄音、判斷，最後用 ARI 的 `continue` 回到你指定的 dialplan 位置。
+
+**Asterisk**
+
+1. 啟用 HTTP server 與 ARI（範例：`examples/asterisk/http.conf`、`ari.conf`）。
+2. 加入 `examples/asterisk/extensions_custom.conf` 的 `[jev-router]` context。
+3. 把 `jev-greeting`、`jev-retry`、`jev-connecting` 放進 `/var/lib/asterisk/sounds/custom/`。
+4. `dialplan reload` 後執行 `bun start`。
+
+**FreePBX**
+
+FreePBX 就是 Asterisk，沒有專屬程式碼。差異只在設定位置：
+
+1. 確認 mini-HTTP server 與 ARI 已啟用。
+2. 把 `[jev-router]` 貼進 `extensions_custom.conf`，執行 `fwconsole reload`。
+3. 建一個 Custom Destination 指向 `jev-router,s,1`。
+4. 把要使用 Jev 的 DID 目的地設成這個 Custom Destination。
+5. 在 System Recordings 建立三個提示音。
+6. route 目的地使用 FreePBX context，例如 `ext-queues,400,1`、`ext-group,600,1`、`from-did-direct,100,1`、`ext-local,vmu100,1`。
+
+逐步設定與檢查指令見 [docs/INTEGRATION.md](docs/INTEGRATION.md)。
+
+## 失敗時會怎樣
+
+`fallbackRoute` 必填。以下情況都會落到它：
+
+- **語音階段**：沒聽到聲音、STT 失敗、STT 逾時（8 秒）
+- **理解階段**：interpreter 失敗或逾時（6 秒）
+- **決策階段**：Jev 失敗或逾時（5 秒）、回傳不存在的 route、信心低於 `minConfidence`、重問後仍需要更多資訊、無對應 route
+- **執行階段**：轉接失敗、PBX 錯誤
+
+如果 fallback 的動作也失敗，router 會把通話交回 dialplan（`continue`），由你 `Stasis()` 下一行的保底邏輯接手。來電者在過程中掛斷的話，不會執行任何動作。
+
+每次通話都會產生一個 `RoutingResult`，包含 `outcome`（`jev` / `direct` / `fallback` / `caller-hung-up`）、選中的 route、fallback 原因、Jev 的選擇與機率、嘗試次數，以及各階段耗時。
+
+---
+
+# 開發者指南
+
+以下內容給要修改程式、接別的 PBX、或整合進自家系統的人。
+
+## 架構
 
 ```
 src/
-  types.ts            Public types: routes, actions, providers, sessions, results
-  config.ts           Validation, defaults, requireEnv
-  router.ts           Call flow implementation (createCallRouter)
-  jev.ts              Jev decision provider (official @typesafe-ai/sdk)
-  logger.ts           Structured JSON logging
-  events.ts           Event hub for live SSE subscribers
-  webhook.ts          Outbound signed HTTP webhook delivery
-  http.ts             Server for visualizer assets and SSE streams
-  demo-server.ts      Demo runner (bun run demo)
+  router.ts        決策流程；不認識任何 PBX
+  types.ts         公開型別（route、action、session、result）
+  config.ts        設定驗證、預設值、requireEnv
+  jev.ts           DecisionProvider：官方 @typesafe-ai/sdk
   providers/
-    speech.ts         Speech-to-text over any OpenAI-style /audio/transcriptions API
-    interpreter.ts    Optional Claude interpreter that summarizes and removes personal details
-  pbx/asterisk/       Asterisk ARI adapter (fetch + WebSocket)
-  testing.ts          Scripted call session for tests and simulations
-  server.ts           Service entry point (bun start)
-router.config.ts      Your routes and providers
-public/index.html     Live dispatcher visualizer
+    speech.ts      OpenAI 相容 STT 與 ElevenLabs Scribe
+    interpreter.ts 選用的 Claude 摘要器（去識別化）
+  pbx/asterisk/    ARI adapter（fetch + WebSocket）
+  http.ts          /events、/simulate、/api/health、視覺化
+  events.ts        SSE 事件匯流排
+  webhook.ts       簽章 webhook 遞送
+  testing.ts       scripted session、textSpeech（測試與 simulate）
+  server.ts        bun start 進入點
+  demo-server.ts   bun run demo 進入點
+router.config.ts   你的 routes、providers、fallback
+public/index.html  即時視覺化
 ```
 
-The core (`router.ts`, `jev.ts`, `types.ts`) knows nothing about Asterisk. A PBX adapter only has to implement `CallSession`:
+核心（`router.ts`、`jev.ts`、`types.ts`）不知道 Asterisk 的存在。PBX adapter 只要實作 `CallSession`，就能接上同一套決策流程。
+
+使用方式：Bun 直接執行 TypeScript，沒有 build step。套件匯出點只有 `./src/index.ts`。
+
+## 核心抽象
 
 ```ts
 interface CallSession {
-  call: CallInfo;
+  readonly call: CallInfo;
   play(media: string): Promise<void>;
   recordUtterance(): Promise<CallerAudio | undefined>;
   execute(action: CallAction): Promise<void>;
 }
+
+interface DecisionProvider {
+  decide(context: DecisionContext, signal: AbortSignal): Promise<Decision>;
+}
+
+interface SpeechToText {
+  transcribe(audio: CallerAudio, signal: AbortSignal): Promise<string>;
+}
+
+// 選用：先把逐字稿整理成不含個人資料的摘要
+interface CallInterpreter {
+  interpret(utterances: string[], signal: AbortSignal): Promise<CallInterpretation>;
+}
 ```
 
-## Requirements
+`DecisionContext` 只包含：逐字稿（或摘要）、你的 route 描述、`facts(call)` 回傳的事實。來電號碼與通道資訊不會送給 Jev，除非你放進 `facts`。
 
-- [Bun](https://bun.sh) 1.3+
-- A TypeSafe API key for Jev
-- A speech-to-text service with an OpenAI-style `/audio/transcriptions` endpoint (OpenAI, Groq, a self-hosted Whisper server, and others)
-- Asterisk 16+ with ARI enabled, or FreePBX 16/17 (which runs Asterisk underneath)
+## 決策規則
 
-## Install and configure
+1. `routeDirectly(call)` 先跑。回傳 route 就跳過 Jev，適合 VIP、營業時間、dialplan 旗標。
+2. 只有有 `description` 的 route 會提供給 Jev，加上兩個保留結果：`need-more-information`、`no-matching-route`。
+3. Jev 只看到最小上下文：`utterances`（或 interpreter 的 `summary`）與 `facts`。
+4. 決策必須是已知 route，且信心 ≥ `minConfidence`。低信心或 `need-more-information` 會重問，最多 `maxAttempts` 次。
+5. 無效結果、`no-matching-route`、逾時、例外，直接走 fallback。
 
-```bash
-git clone <this repo> && cd jev-call-router
-bun install
-cp .env.example .env    # then fill in values; .env is gitignored
-```
+`evaluateDecision()` 有獨立匯出，方便在自己的測試裡驗證決策規則。
 
-| Variable | Required | Purpose |
+## 擴充點
+
+| 想做的事 | 動哪裡 |
+|---|---|
+| 接另一個 PBX | 實作 `CallSession`，每通電話呼叫 `router.handleCall(session)` |
+| 換決策模型 | 實作 `DecisionProvider`，傳給 `createCallRouter({ decider })` |
+| 換語音轉文字 | 實作 `SpeechToText`；內建 OpenAI 相容與 ElevenLabs |
+| 只做決策、不碰語音 | `router.routeTranscript(call, utterances)` |
+| 減少送給 Jev 的個資 | 加上 `interpreter: createClaudeInterpreter()` |
+| 接 CRM / 工單 | 用 `onResult` 接 `sendWebhook`，或自己寫 |
+| 做自己的 dashboard | 訂閱 `eventHub`，或接 `GET /events` |
+| 加測試 | 用 `createScriptedSession` 與 `textSpeech`，不需要真的 PBX |
+
+## createCallRouter 選項
+
+| 選項 | 預設 | 說明 |
 |---|---|---|
-| `TYPESAFE_API_KEY` | yes | Jev API key |
-| `TYPESAFE_DEFAULT_MODEL` | no | Pin a Jev model (SDK default: `jev-latest`) |
-| `STT_API_KEY`, `STT_BASE_URL`, `STT_MODEL` | yes | Speech-to-text service |
-| `STT_LANGUAGE` | no | Language hint such as `en` |
-| `ARI_URL`, `ARI_USERNAME`, `ARI_PASSWORD` | yes for `bun start` | Asterisk REST Interface |
-| `ARI_APP` | no | Stasis app name (default `jev-router`) |
-| `ANTHROPIC_API_KEY` | only with the interpreter | Claude interpreter |
-| `WEBHOOK_URL` | no | Endpoint to receive routing outcomes via HTTP POST |
-| `WEBHOOK_SECRET` | no | Key for signing webhook payloads with HMAC-SHA256 |
-| `PORT` | no | HTTP visualizer and SSE port (default `3000`) |
+| `routes` | 必填 | 你的分流結果；只有有 `description` 的會給 Jev |
+| `fallbackRoute` | 必填 | 無法安全完成時使用的 route |
+| `prompts.greeting` | 必填 | 第一次播放的語音 |
+| `prompts.retry` | 同 greeting | 重問時播放的語音 |
+| `maxAttempts` | `2` | 最多聽幾次 |
+| `minConfidence` | `0.7` | 低於此值就重問或 fallback |
+| `timeouts` | STT 8s / interpreter 6s / Jev 5s | 各階段逾時 |
+| `routeDirectly(call)` | 無 | 回傳 route 名稱即可跳過 Jev |
+| `facts(call)` | 無 | 額外給 Jev 的事實，例如 `{ afterHours: true }` |
+| `interpreter` | 無 | 先把逐字稿摘要再給 Jev |
+| `onResult(result)` | 無 | 每通電話的 `RoutingResult` |
+| `logger` | 靜默 | `createJsonLogger()` 輸出 JSON lines |
+| `debugTranscript` | `false` | 把逐字稿印到日誌 |
 
-### Jev configuration
-
-Create an API key in your TypeSafe account (see [docs.typesafe.ai](https://docs.typesafe.ai)) and put it in `.env` as `TYPESAFE_API_KEY`. Never commit it. The router uses the official `@typesafe-ai/sdk` `systemOne` API. Each decision is one `choice` question whose options are your described routes plus two reserved outcomes: `need-more-information` and `no-matching-route`.
-
-## Minimal example
-
-```ts
-import { createCallRouter, createJevDecider, createTranscriptionSpeech, requireEnv } from "jev-call-router";
-
-const router = createCallRouter({
-  decider: createJevDecider({ apiKey: requireEnv("TYPESAFE_API_KEY") }),
-  speech: createTranscriptionSpeech({
-    apiKey: requireEnv("STT_API_KEY"),
-    baseUrl: requireEnv("STT_BASE_URL"),
-    model: requireEnv("STT_MODEL"),
-  }),
-  routes: {
-    sales:   { description: "Buying, pricing, quotes.",      action: { type: "transfer", destination: "ext-queues,400,1" } },
-    support: { description: "Something is broken.",          action: { type: "transfer", destination: "ext-queues,401,1" } },
-    billing: { description: "Invoices, charges, refunds.",   action: { type: "transfer", destination: "ext-queues,402,1" } },
-    "human-agent": { action: { type: "transfer", destination: "from-did-direct,100,1" } },
-  },
-  fallbackRoute: "human-agent",
-  prompts: { greeting: "sound:custom/jev-greeting" },
-  onResult: (result) => {
-    // Deliver to external webhook, CRM, or audit store
-  },
-});
-
-await router.handleCall(session);                               // a CallSession from a PBX adapter
-await router.routeTranscript(call, ["I was charged twice"]);    // decide only, no audio or PBX
-```
-
-## How routing decisions work
-
-1. Deterministic rules run first via `routeDirectly(call)` for VIP lists, business hours, per-number opt-in, or dialplan flags. Jev is not called when a route is returned.
-2. Only routes with a `description` are offered to Jev. Routes without descriptions are reached only via `routeDirectly` or as the fallback.
-3. Jev receives minimal context: the caller's speech (or interpreter summary), the route descriptions, and facts returned by `facts(call)`. Caller ID and internal channel data are omitted unless explicitly included.
-4. Decisions require a known route with confidence at or above `minConfidence` (default `0.7`). Low confidence or `need-more-information` triggers a retry prompt, up to `maxAttempts` (default `2`).
-5. Actions map explicitly to `transfer` (a PBX destination), `continue` (return to the dialplan), or `hangup`, with an optional `announcement` played first.
-
-## Custom routing outcomes
-
-Routes are plain data. Add, rename, or remove them in `router.config.ts`. Names use lowercase letters, digits, `-` and `_`. The two reserved names above are rejected. See [`examples/routing-scenarios.ts`](examples/routing-scenarios.ts) for several complete setups.
-
-## Fallback behavior
-
-`fallbackRoute` is required and must name one of your routes. The router falls back on: no speech, speech-to-text failure, interpreter failure, Jev failure, timeout, invalid decision, `no-matching-route`, repeated low confidence or `need-more-information`, an unknown direct route, or a PBX error. If the chosen route's action fails, the router tries the fallback. If that also fails, it returns the call to the dialplan (`continue`), where your PBX-side fallback line runs. If the caller hangs up, nothing is executed.
-
-Every call produces a `RoutingResult` (passed to `onResult` and logged) with the outcome, route, fallback reason, Jev's choice, confidence and probabilities, offered routes, attempts, and per-stage timings.
-
-## Asterisk and FreePBX
-
-The Asterisk adapter uses ARI: the dialplan hands the call to `Stasis(jev-router)`, and the router answers, plays prompts, records the caller, and then continues the channel in the dialplan at the chosen destination. Transfer destinations are dialplan targets written as `context,extension[,priority]`.
-
-FreePBX is Asterisk with a management layer, so it uses the same adapter. There is no FreePBX-specific code. You add one custom dialplan context and a Custom Destination, and route destinations point at FreePBX contexts such as `ext-queues,400,1`, `ext-group,600,1`, `from-did-direct,100,1`, or `ext-local,vmu100,1`.
-
-Step-by-step setup: [docs/INTEGRATION.md](docs/INTEGRATION.md).
-
-## Run
+## CLI 與 HTTP 端點
 
 ```bash
-bun start                                              # connect to Asterisk and route calls
-bun run simulate "I think I was charged twice"         # full call flow with text instead of audio, real Jev
-bun run simulate "hello?" "I need to pay my invoice"   # second utterance answers the retry prompt
-bun run demo                                           # start visualizer on http://localhost:3000
+bun start                                    # 接 Asterisk 並開始路由
+bun run demo                                 # 視覺化 + 模擬輸入
+bun run simulate "我要退貨" "訂單 A12345"      # 文字代替語音，真的呼叫 Jev
+bun test                                     # 單元與整合測試
+bun run typecheck                            # tsc --noEmit（strict）
 ```
 
-## Live visualizer
+`bun start` 與 `bun run demo` 都會啟動 HTTP 服務：
 
-Run `bun run demo` and open `http://localhost:3000`.
+| 端點 | 說明 |
+|---|---|
+| `GET /` | 視覺化頁面 |
+| `GET /events` | SSE 事件串流；連線時先送一個 `connected` 事件 |
+| `POST /simulate` | 用 scripted session 跑一次完整流程（真的呼叫 Jev） |
+| `GET /api/health` | `{ status: "ok", subscribers }` |
 
-The visualizer shows up to 10 concurrent calls as animated lanes moving through ringing, transcription, Jev intent classification, and queue dispatch. Use the bottom drawer to inject test phrases or trigger a 10-call burst to watch routing under load.
+`POST /simulate` 範例：
 
-The UI connects to `GET /events` over Server-Sent Events. Both `bun run demo` and production `bun start` stream events through this hub.
+```bash
+curl -X POST http://localhost:3000/simulate \
+  -H "Content-Type: application/json" \
+  -d '{"utterances": ["你好？", "我要退貨，訂單 A12345"]}'
+```
 
-## Outbound webhook
+回應：
 
-Set `WEBHOOK_URL` in `.env` to receive a signed POST request after each call finishes:
+```json
+{ "ok": true, "result": { "callId": "simulated-...", "outcome": "jev", "route": "returns" } }
+```
+
+## Webhook
+
+設定 `WEBHOOK_URL` 後，每通電話結束會收到一個 POST。`data` 就是完整的 `RoutingResult`：
 
 ```json
 {
   "event": "call.result",
-  "timestamp": "2026-01-01T00:00:00.000Z",
+  "timestamp": "2026-11-04T08:00:00.000Z",
   "data": {
-    "callId": "...",
-    "outcome": "routed",
-    "route": "sales",
-    "confidence": 0.94
+    "callId": "1743321234.42",
+    "outcome": "jev",
+    "route": "returns",
+    "action": { "type": "transfer", "destination": "ext-queues,301,1" },
+    "decision": {
+      "outcome": "returns",
+      "confidence": 0.94,
+      "probabilities": { "returns": 0.94, "order-status": 0.04 },
+      "model": "jev-latest"
+    },
+    "offeredRoutes": ["order-status", "returns", "product", "human-agent"],
+    "attempts": 1,
+    "timings": { "speechMs": 1180, "decisionMs": 420, "totalMs": 1850 }
   }
 }
 ```
 
-If `WEBHOOK_SECRET` is set, requests include an `X-Jev-Signature` header containing an HMAC-SHA256 hex digest of the raw body:
+有 `WEBHOOK_SECRET` 時，會多一個 `X-Jev-Signature` header，內容是原始 body 的 HMAC-SHA256 hex：
 
 ```ts
-import crypto from "crypto";
+import { createHmac } from "crypto";
 
-const sig = crypto.createHmac("sha256", process.env.WEBHOOK_SECRET)
+const expected = createHmac("sha256", process.env.WEBHOOK_SECRET!)
   .update(rawBody)
   .digest("hex");
-if (sig !== req.headers["x-jev-signature"]) {
+
+if (expected !== req.headers["x-jev-signature"]) {
   throw new Error("invalid signature");
 }
 ```
 
-Delivery runs in the background with a 4-second timeout so it never blocks PBX call teardown. Failed attempts log a warning without dropping the call.
+遞送在背景執行，4 秒逾時，不會阻擋通話結束。失敗只記 warning。
 
-## Server-Sent Events
+## SSE
 
-`GET /events` streams call state changes:
+`GET /events` 會送這些事件：
 
-| Event | Emitted when |
-|---|---|
-| `call.started` | Call accepted by Stasis |
-| `call.speaking` | Speech transcribed |
-| `call.thinking` | Sent to Jev for classification |
-| `call.routed` | Route selected with confidence score |
-| `call.fallback` | Routing fell back to default destination |
-| `call.ended` | Call finished |
+| 事件 | 時機 | 主要欄位 |
+|---|---|---|
+| `connected` | 連線建立 | `time` |
+| `call.started` | 通話進入 Stasis | `callId`, `caller`, `dialed` |
+| `call.speaking` | 轉錄完成 | `callId`, `transcript` |
+| `call.thinking` | 送出分類 | `callId`, `offeredRoutes`, `utterancesCount` |
+| `call.routed` | 選中 route | `callId`, `route`, `destination`, `confidence`, `probabilities`, `timings` |
+| `call.fallback` | 轉向 fallback | `callId`, `reason`, `route`, `destination`, `error` |
+| `call.ended` | 通話結束 | `callId`, `outcome`, `route`, `fallbackReason`, `timings` |
+
+`destination` 欄位放的是該 route 的 action 物件（例如 `{ "type": "transfer", "destination": "ext-queues,301,1" }`）。
 
 ```js
 const events = new EventSource("http://localhost:3000/events");
@@ -232,15 +493,14 @@ events.addEventListener("call.routed", (e) => {
 });
 ```
 
-`POST /simulate` triggers a scripted call through the real routing pipeline and emits the same events, useful for building external dashboards without an active PBX.
-
-## Tests and development
+## 測試
 
 ```bash
-bun test            # router scenarios, fallbacks, Jev request/response contract, ARI adapter against a mock ARI server
-bun run typecheck   # tsc --noEmit (strict)
+bun test
 ```
 
-The tests focus on behavior that matters on a live call: decision validation, every fallback path, context minimization, action-failure recovery, caller hang-up, and the exact ARI requests the adapter sends.
+涵蓋 router 決策、所有 fallback 路徑、上下文最小化、動作失敗後的恢復、來電者掛斷，以及 ARI adapter 對 mock server 送出的實際請求。decision provider 另有 Jev 請求與回應契約測試。
 
-To support another PBX, implement `CallSession` for it and call `router.handleCall(session)` for each call. Nothing else changes.
+## 授權
+
+[MIT](LICENSE)
