@@ -340,8 +340,14 @@ If you record in Mandarin, use the lines in [README.md](README.md) instead.
 Put `jev-greeting`, `jev-retry`, `jev-connecting`, and `jev-no-speech` in `/var/lib/asterisk/sounds/custom/`. 8 kHz mono is the safe choice:
 
 ```bash
+# from WAV
 sox greeting-raw.wav -r 8000 -c 1 -b 16 /var/lib/asterisk/sounds/custom/jev-greeting.wav
+
+# from MP3
+lame --decode greeting.mp3 - | sox -v 0.5 -t wav - -t wav -b 16 -r 8000 -c 1 /var/lib/asterisk/sounds/custom/jev-greeting.wav
 ```
+
+Install `lame` and `sox` first (for example `sudo apt install lame sox`); writing to `/var/lib/asterisk/sounds/custom/` needs the appropriate permissions.
 
 `router.config.ts` references them as `sound:custom/jev-greeting`, without an extension.
 

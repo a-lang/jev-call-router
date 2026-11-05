@@ -337,8 +337,14 @@ ARI_APP=jev-router
 把 `jev-greeting`、`jev-retry`、`jev-connecting`、`jev-no-speech` 放進 `/var/lib/asterisk/sounds/custom/`。建議轉成 8 kHz 單聲道：
 
 ```bash
+# from WAV
 sox greeting-raw.wav -r 8000 -c 1 -b 16 /var/lib/asterisk/sounds/custom/jev-greeting.wav
+
+# from MP3
+lame --decode greeting.mp3 - | sox -v 0.5 -t wav - -t wav -b 16 -r 8000 -c 1 /var/lib/asterisk/sounds/custom/jev-greeting.wav
 ```
+
+需要先安裝 `lame` 與 `sox`（例如 `sudo apt install lame sox`），且寫入 `/var/lib/asterisk/sounds/custom/` 需要對應權限。
 
 `router.config.ts` 以 `sound:custom/jev-greeting` 引用，不加副檔名。
 
