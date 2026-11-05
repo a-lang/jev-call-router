@@ -72,6 +72,14 @@ The copy-paste minimal setup lives in [README › 接上 Asterisk / FreePBX](../
    ```
 
 3. Record prompts: Put `jev-greeting`, `jev-retry`, `jev-connecting`, and `jev-no-speech` (WAV or ulaw) in `/var/lib/asterisk/sounds/custom/`. They are referenced as `sound:custom/jev-greeting`.
+
+   | Prompt | Line |
+   |---|---|
+   | `jev-greeting` | Hello, how can I help you? |
+   | `jev-retry` | Sorry, I didn't catch that. Please say it again. |
+   | `jev-connecting` | Connecting you now, please hold. |
+   | `jev-no-speech` | Sorry, I didn't hear a response. Please call back later. |
+
 4. Reload and check:
 
    ```

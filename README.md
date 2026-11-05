@@ -325,6 +325,15 @@ ARI_APP=jev-router
 
 **提示音**
 
+四組提示音的台詞：
+
+| 提示音 | 文字 |
+|---|---|
+| `jev-greeting` | 您好，請問您需要什麼服務呢？ |
+| `jev-retry` | 抱歉！我沒聽清楚，請再說一次 |
+| `jev-connecting` | 正在為你轉接，請稍後 |
+| `jev-no-speech` | 抱歉，沒有聽到您的回應，請稍後再撥 |
+
 把 `jev-greeting`、`jev-retry`、`jev-connecting`、`jev-no-speech` 放進 `/var/lib/asterisk/sounds/custom/`。建議轉成 8 kHz 單聲道：
 
 ```bash

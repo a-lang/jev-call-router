@@ -326,6 +326,17 @@ ARI_APP=jev-router
 
 **Prompts**
 
+Four prompts, with the line spoken on the recording:
+
+| Prompt | Line |
+|---|---|
+| `jev-greeting` | Hello, how can I help you? |
+| `jev-retry` | Sorry, I didn't catch that. Please say it again. |
+| `jev-connecting` | Connecting you now, please hold. |
+| `jev-no-speech` | Sorry, I didn't hear a response. Please call back later. |
+
+If you record in Mandarin, use the lines in [README.md](README.md) instead.
+
 Put `jev-greeting`, `jev-retry`, `jev-connecting`, and `jev-no-speech` in `/var/lib/asterisk/sounds/custom/`. 8 kHz mono is the safe choice:
 
 ```bash
