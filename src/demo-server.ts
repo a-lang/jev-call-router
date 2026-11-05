@@ -1,4 +1,4 @@
-import { fallbackRoute, prompts, routes } from "../router.config.ts";
+import { fallbackRoute, fallbackRouteByReason, prompts, routes } from "../router.config.ts";
 import { requireEnv } from "./config.ts";
 import { startHttpServer } from "./http.ts";
 import { createJevDecider } from "./jev.ts";
@@ -18,6 +18,7 @@ function start(): void {
     speech: textSpeech,
     routes,
     fallbackRoute,
+    fallbackRouteByReason,
     prompts,
     maxAttempts: 2,
     minConfidence: 0.7,

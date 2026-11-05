@@ -20,6 +20,8 @@ describe("configuration validation", () => {
 
   test.each([
     ["an undefined fallback route", { fallbackRoute: "nobody" }],
+    ["a fallbackRouteByReason entry pointing at an undefined route", { fallbackRouteByReason: { "no-speech": "nobody" } }],
+    ["a fallbackRouteByReason entry with an unknown reason", { fallbackRouteByReason: { nospeech: "operator" } }],
     ["no routes", { routes: {} }],
     ["no route Jev can choose", { routes: { operator: valid.routes.operator! } }],
     ["a reserved route name", { routes: { ...valid.routes, "need-more-information": valid.routes.operator! } }],

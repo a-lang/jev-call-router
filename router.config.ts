@@ -5,6 +5,7 @@ import {
   requireEnv,
   sendWebhook,
   type CallRouterConfig,
+  type FallbackReason,
   type Logger,
   type Route,
 } from "./src/index.ts";
@@ -34,9 +35,18 @@ export const routes: Record<string, Route> = {
   "standard-ivr": {
     action: { type: "continue" },
   },
+  // No description, so Jev never offers it: reached only via fallbackRouteByReason.
+  hangup: {
+    action: { type: "hangup" },
+    announcement: "sound:custom/jev-no-speech",
+  },
 };
 
 export const fallbackRoute = "human-agent";
+
+export const fallbackRouteByReason: Partial<Record<FallbackReason, string>> = {
+  "no-speech": "hangup",
+};
 
 export const prompts = {
   greeting: "sound:custom/jev-greeting",
@@ -60,6 +70,7 @@ export function createRouterConfig(logger: Logger): CallRouterConfig {
     }),
     routes,
     fallbackRoute,
+    fallbackRouteByReason,
     prompts,
     maxAttempts: 2,
     minConfidence: 0.7,
