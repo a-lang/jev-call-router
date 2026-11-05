@@ -1,7 +1,7 @@
 # jev-call-router
 
 <p align="center">
-  <img src="docs/cover.en.png" alt="jev-call-router: smart routing shouldn't need a keypad" width="100%">
+  <img src="assets/cover.en.png" alt="jev-call-router: smart routing shouldn't need a keypad" width="100%">
 </p>
 
 <p align="center">
@@ -136,7 +136,7 @@ Fill in the ARI and STT values in `.env`, then:
 bun start
 ```
 
-This starts both the ARI connection and the HTTP service (visualizer and SSE on `http://localhost:3000` by default). Full Asterisk and FreePBX setup: [docs/INTEGRATION.md](docs/INTEGRATION.md).
+This starts both the ARI connection and the HTTP service (visualizer and SSE on `http://localhost:3000` by default). Full Asterisk and FreePBX setup: [INTEGRATION.md](INTEGRATION.md).
 
 ## Define your routes
 
@@ -335,7 +335,7 @@ Four prompts, with the line spoken on the recording:
 | `jev-connecting` | Connecting you now, please hold. |
 | `jev-no-speech` | Sorry, I didn't hear a response. Please call back later. |
 
-If you record in Mandarin, use the lines in [README.md](README.md) instead.
+Bundled recordings live in `assets/sounds/en/` (English) and `assets/sounds/tw/` (Taiwanese Mandarin), each with `jev-greeting.mp3`, `jev-retry.mp3`, `jev-connecting.mp3`, and `jev-no-speech.mp3`.
 
 Put `jev-greeting`, `jev-retry`, `jev-connecting`, and `jev-no-speech` in `/var/lib/asterisk/sounds/custom/`. 8 kHz mono is the safe choice:
 
@@ -343,8 +343,12 @@ Put `jev-greeting`, `jev-retry`, `jev-connecting`, and `jev-no-speech` in `/var/
 # from WAV
 sox greeting-raw.wav -r 8000 -c 1 -b 16 /var/lib/asterisk/sounds/custom/jev-greeting.wav
 
-# from MP3
-lame --decode greeting.mp3 - | sox -v 0.5 -t wav - -t wav -b 16 -r 8000 -c 1 /var/lib/asterisk/sounds/custom/jev-greeting.wav
+# from the bundled MP3s (use assets/sounds/tw for Mandarin)
+SOUNDS_DIR=assets/sounds/en
+for f in "$SOUNDS_DIR"/jev-*.mp3; do
+  lame --decode "$f" - | sox -v 0.5 -t wav - -t wav -b 16 -r 8000 -c 1 \
+    "/var/lib/asterisk/sounds/custom/$(basename "${f%.mp3}").wav"
+done
 ```
 
 Install `lame` and `sox` first (for example `sudo apt install lame sox`); writing to `/var/lib/asterisk/sounds/custom/` needs the appropriate permissions.
@@ -396,7 +400,7 @@ FreePBX is Asterisk, so there is no FreePBX-specific code. Only the configuratio
 | Recording works but the transfer fails | The destination context or extension does not exist; confirm with `dialplan show <context>` |
 | Playback fails | The prompt is missing from `/var/lib/asterisk/sounds/custom/`, or the format is wrong |
 
-Step-by-step setup and verification commands: [docs/INTEGRATION.md](docs/INTEGRATION.md).
+Step-by-step setup and verification commands: [INTEGRATION.md](INTEGRATION.md).
 
 ## What happens when routing fails
 
@@ -439,6 +443,7 @@ src/
   demo-server.ts   bun run demo entry point
 router.config.ts   Your routes, providers, fallback
 public/index.html  Live visualizer
+assets/sounds/     Bundled English and Taiwanese-Mandarin prompt MP3s
 ```
 
 The core (`router.ts`, `jev.ts`, `types.ts`) does not know Asterisk exists. A PBX adapter only has to implement `CallSession` to plug into the same decision flow.

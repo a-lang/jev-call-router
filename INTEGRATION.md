@@ -59,12 +59,12 @@ The router's host needs outbound HTTPS to `api.typesafe.ai`, your STT host (`api
 
 ## PBX configuration
 
-The copy-paste minimal setup lives in [README › 接上 Asterisk / FreePBX](../README.md#接上-asterisk--freepbx). This section is the full walkthrough, including the FreePBX specifics.
+The copy-paste minimal setup lives in [README › 接上 Asterisk / FreePBX](README.md#接上-asterisk--freepbx). This section is the full walkthrough, including the FreePBX specifics.
 
 ### Plain Asterisk
 
-1. Enable the HTTP server and ARI: See [`examples/asterisk/http.conf`](../examples/asterisk/http.conf) and [`examples/asterisk/ari.conf`](../examples/asterisk/ari.conf). Bind to `127.0.0.1` if the router runs on the same host. Otherwise bind to a private interface and enable TLS.
-2. Add the dialplan context from [`examples/asterisk/extensions_custom.conf`](../examples/asterisk/extensions_custom.conf) and send calls into it, for example:
+1. Enable the HTTP server and ARI: See [`examples/asterisk/http.conf`](examples/asterisk/http.conf) and [`examples/asterisk/ari.conf`](examples/asterisk/ari.conf). Bind to `127.0.0.1` if the router runs on the same host. Otherwise bind to a private interface and enable TLS.
+2. Add the dialplan context from [`examples/asterisk/extensions_custom.conf`](examples/asterisk/extensions_custom.conf) and send calls into it, for example:
 
    ```
    [from-pstn]
@@ -79,6 +79,8 @@ The copy-paste minimal setup lives in [README › 接上 Asterisk / FreePBX](../
    | `jev-retry` | Sorry, I didn't catch that. Please say it again. |
    | `jev-connecting` | Connecting you now, please hold. |
    | `jev-no-speech` | Sorry, I didn't hear a response. Please call back later. |
+
+   Ready-made recordings live in `assets/sounds/en/` and `assets/sounds/tw/`; the [README](README.md) has a batch conversion command.
 
 4. Reload and check:
 
@@ -126,7 +128,7 @@ Point this destination at an attended extension or staffed queue.
 
 ## Application configuration
 
-Everything lives in [`router.config.ts`](../router.config.ts):
+Everything lives in [`router.config.ts`](router.config.ts):
 
 ```ts
 export const routes: Record<string, Route> = {

@@ -1,7 +1,7 @@
 # jev-call-router
 
 <p align="center">
-  <img src="docs/cover.zh-TW.png" alt="jev-call-router：智慧分流，不該靠按鍵" width="100%">
+  <img src="assets/cover.zh-TW.png" alt="jev-call-router：智慧分流，不該靠按鍵" width="100%">
 </p>
 
 <p align="center">
@@ -124,6 +124,8 @@ bun run demo               # http://localhost:3000
 ```bash
 bun run simulate "我上週訂的耳機還沒到"
 bun run simulate "我要退貨" "訂單編號 A12345"
+bun run simulate "我要找真人客服"
+bun run simulate "這個月發票金額好像不對"
 ```
 
 第二句會回答重試提示。輸出包含 `played`（播放了哪些語音）、`executed`（執行了哪個動作）與完整的 `result`。
@@ -136,7 +138,7 @@ bun run simulate "我要退貨" "訂單編號 A12345"
 bun start
 ```
 
-這會同時啟動 ARI 連線與 HTTP 服務（視覺化與 SSE，預設 `http://localhost:3000`）。Asterisk 與 FreePBX 的完整設定步驟見 [docs/INTEGRATION.md](docs/INTEGRATION.md)。
+這會同時啟動 ARI 連線與 HTTP 服務（視覺化與 SSE，預設 `http://localhost:3000`）。Asterisk 與 FreePBX 的完整設定步驟見 [INTEGRATION.md](INTEGRATION.md)。
 
 ## 定義你的 routes
 
@@ -199,6 +201,19 @@ export const fallbackRouteByReason = {
   "no-speech": "hangup",
 };
 ```
+
+對應上面 routes 的來電語音範例：
+
+| 來電者可能說 | 預期 route | 說明 |
+|---|---|---|
+| 「我上週訂的耳機還沒到，想問什麼時候會出貨」 | `order-status` | 出貨與配送進度 |
+| 「我要退貨，訂單編號 A12345」 | `returns` | 退貨、退款 |
+| 「這雙鞋有 26 公分的嗎？」 | `product` | 商品規格、庫存 |
+| 「我要找真人客服」 | `human-agent` | 明確要求真人 |
+| 「請問你們過年有營業嗎？」 | `human-agent` | 沒有對應 route，走 `fallbackRoute` |
+| （連續靜音，沒有說話） | `hangup` | `no-speech` fallback，先播提示音再掛斷 |
+
+寫 `description` 時，直接把來電者可能說的用詞放進去，比只寫抽象分類名稱更容易命中。
 
 搭配一條不經過 Jev 的直通規則：
 
@@ -334,14 +349,18 @@ ARI_APP=jev-router
 | `jev-connecting` | 正在為你轉接，請稍後 |
 | `jev-no-speech` | 抱歉，沒有聽到您的回應，請稍後再撥 |
 
-把 `jev-greeting`、`jev-retry`、`jev-connecting`、`jev-no-speech` 放進 `/var/lib/asterisk/sounds/custom/`。建議轉成 8 kHz 單聲道：
+現成錄音放在 `assets/sounds/tw/`（台灣華語）與 `assets/sounds/en/`（英文），各有 `jev-greeting.mp3`、`jev-retry.mp3`、`jev-connecting.mp3`、`jev-no-speech.mp3`。把這四個名稱放進 `/var/lib/asterisk/sounds/custom/`；建議轉成 8 kHz 單聲道：
 
 ```bash
-# from WAV
+# 從 WAV
 sox greeting-raw.wav -r 8000 -c 1 -b 16 /var/lib/asterisk/sounds/custom/jev-greeting.wav
 
-# from MP3
-lame --decode greeting.mp3 - | sox -t wav - -t wav -b 16 -r 8000 -c 1 /var/lib/asterisk/sounds/custom/jev-greeting.wav
+# 從現成的 MP3 批次轉檔（英文版把 tw 改成 en）
+SOUNDS_DIR=assets/sounds/tw
+for f in "$SOUNDS_DIR"/jev-*.mp3; do
+  lame --decode "$f" - | sox -t wav - -t wav -b 16 -r 8000 -c 1 \
+    "/var/lib/asterisk/sounds/custom/$(basename "${f%.mp3}").wav"
+done
 ```
 
 需要先安裝 `lame` 與 `sox`（例如 `sudo apt install lame sox`），且寫入 `/var/lib/asterisk/sounds/custom/` 需要對應權限。
@@ -393,7 +412,7 @@ FreePBX 就是 Asterisk，沒有專屬程式碼。差異只在設定位置：
 | 有錄音但轉接失敗 | destination 的 context 或 extension 不存在，用 `dialplan show <context>` 確認 |
 | 播音失敗 | 音檔不在 `/var/lib/asterisk/sounds/custom/`，或格式不對 |
 
-逐步設定與檢查指令見 [docs/INTEGRATION.md](docs/INTEGRATION.md)。
+逐步設定與檢查指令見 [INTEGRATION.md](INTEGRATION.md)。
 
 ## 失敗時會怎樣
 
@@ -436,6 +455,7 @@ src/
   demo-server.ts   bun run demo 進入點
 router.config.ts   你的 routes、providers、fallback
 public/index.html  即時視覺化
+assets/sounds/     現成的台灣華語與英文提示音 MP3
 ```
 
 核心（`router.ts`、`jev.ts`、`types.ts`）不知道 Asterisk 的存在。PBX adapter 只要實作 `CallSession`，就能接上同一套決策流程。
