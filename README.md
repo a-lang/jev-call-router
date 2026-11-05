@@ -341,7 +341,7 @@ ARI_APP=jev-router
 sox greeting-raw.wav -r 8000 -c 1 -b 16 /var/lib/asterisk/sounds/custom/jev-greeting.wav
 
 # from MP3
-lame --decode greeting.mp3 - | sox -v 0.5 -t wav - -t wav -b 16 -r 8000 -c 1 /var/lib/asterisk/sounds/custom/jev-greeting.wav
+lame --decode greeting.mp3 - | sox -t wav - -t wav -b 16 -r 8000 -c 1 /var/lib/asterisk/sounds/custom/jev-greeting.wav
 ```
 
 需要先安裝 `lame` 與 `sox`（例如 `sudo apt install lame sox`），且寫入 `/var/lib/asterisk/sounds/custom/` 需要對應權限。
