@@ -1,0 +1,1796 @@
+<!DOCTYPE html>
+<!--
+  jev-call-router — single-page ad
+  ============================================================
+  上線前要替換的 4 個絕對網址（搜尋 YOUR-DOMAIN）：
+    1. <link rel="canonical">
+    2. <meta property="og:url">
+    3. <meta property="og:image">
+    4. <meta name="twitter:image">
+  目前為本機預覽，og 標籤用佔位符；社群爬蟲不吃相對路徑。
+  部署到 GitHub Pages（docs/）通常會是：
+    https://a-lang.github.io/jev-call-router/
+  ============================================================
+-->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>jev-call-router — 智慧分流，不該靠按鍵</title>
+<meta name="description" content="讓來電者說一句話，就接到正確的佇列或分機。Jev 只從你定義的路線裡選一條，PBX 保留最後的執行權。開源 MIT，Bun + Asterisk。">
+<link rel="canonical" href="https://YOUR-DOMAIN/">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="jev-call-router">
+<meta property="og:title" content="jev-call-router — 智慧分流，不該靠按鍵">
+<meta property="og:description" content="讓來電者說一句話，就接到正確的佇列或分機。Jev 只從你定義的路線裡選一條，PBX 保留最後的執行權。開源 MIT。">
+<meta property="og:url" content="https://YOUR-DOMAIN/">
+<meta property="og:image" content="https://YOUR-DOMAIN/og.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="來電者說一句話，經 Jev 分類後轉接到正確的佇列">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:locale:alternate" content="en_US">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="jev-call-router — 智慧分流，不該靠按鍵">
+<meta name="twitter:description" content="讓來電者說一句話，就接到正確的佇列或分機。Jev 只做選擇題，PBX 保留執行權。">
+<meta name="twitter:image" content="https://YOUR-DOMAIN/og.jpg">
+<meta name="twitter:image:alt" content="來電一句話，經 Jev 分類後轉接到正確佇列">
+<meta name="theme-color" content="#FBF7F1">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a211b'/%3E%3Cpath d='M9 7a2 2 0 0 0-2 2c0 8.8 7.2 16 16 16a2 2 0 0 0 2-2v-3l-4-1-1.5 2c-3-1.6-5.5-4.1-7.1-7.1L14 12l-1-4H9Z' fill='none' stroke='%23dc9a68' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+<script>document.documentElement.classList.add('js');</script>
+
+<style>
+:root{
+  --bg:#fbf7f1;
+  --bg-2:#f6eee2;
+  --surface:#fffdf9;
+  --surface-2:#f9f1e5;
+  --ink:#2a211b;
+  --muted:#6f6153;
+  --faint:#786857;
+  --line:#e7d8c6;
+  --line-strong:#dcc8b2;
+  --clay:#a94a24;
+  --clay-deep:#8f3b1c;
+  --clay-soft:#c97a55;
+  --apricot:#dc9a68;
+  --violet:#a94a24;
+  --violet-soft:#a94a24;
+  --cyan:#c97a55;
+  --green:#27714b;
+  --amber:#8a5308;
+  --rose:#9e4622;
+  --espresso:#2a211b;
+  --espresso-2:#33291f;
+  --cream:#f7efe4;
+  --cream-muted:#b9aa98;
+  --cream-faint:#9c8b7a;
+  --radius:24px;
+  --radius-sm:14px;
+  --container:1160px;
+  --shadow:0 24px 60px -34px rgba(81,49,35,.38);
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html{background:var(--bg);scroll-behavior:smooth;-webkit-text-size-adjust:100%;color-scheme:light}
+body{
+  margin:0;
+  background:transparent;
+  color:var(--ink);
+  font-family:Inter,"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,-apple-system,sans-serif;
+  font-size:16px;
+  line-height:1.7;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  overflow-x:hidden;
+}
+body::before{
+  content:"";
+  position:fixed;
+  inset:-25%;
+  z-index:-2;
+  pointer-events:none;
+  background:
+    radial-gradient(38% 38% at 18% 8%, rgba(220,154,104,.34), transparent 62%),
+    radial-gradient(30% 30% at 82% 16%, rgba(243,214,182,.42), transparent 60%),
+    radial-gradient(34% 34% at 66% 88%, rgba(201,122,85,.16), transparent 62%);
+  filter:blur(70px) saturate(108%);
+  animation:drift 24s ease-in-out infinite alternate;
+}
+body::after{
+  content:"";
+  position:fixed;
+  inset:0;
+  z-index:-1;
+  pointer-events:none;
+  opacity:.03;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+@keyframes drift{
+  0%{transform:translate3d(-2%,-1%,0) scale(1)}
+  100%{transform:translate3d(2%,2%,0) scale(1.06)}
+}
+@media (prefers-reduced-motion:reduce){
+  body::before{animation:none}
+}
+::selection{background:rgba(169,74,36,.22);color:var(--ink)}
+:focus-visible{outline:2px solid var(--clay);outline-offset:3px;border-radius:8px}
+img,svg{max-width:100%}
+a{color:inherit}
+button{font:inherit;color:inherit}
+h1,h2,h3,h4,p{margin:0}
+h1,h2,h3,h4{line-height:1.15;letter-spacing:-.02em}
+.skip{
+  position:absolute;left:-9999px;top:0;z-index:100;
+  background:var(--clay);color:#fff8f0;padding:12px 18px;border-radius:0 0 12px 0;
+}
+.skip:focus{left:0}
+.sr-only{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0;
+}
+
+.container{width:min(var(--container),calc(100% - 48px));margin-inline:auto}
+.section{padding:clamp(64px,8vw,112px) 0;position:relative}
+.grad{color:var(--clay)}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:10px;
+  font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--clay);
+}
+.eyebrow::before{
+  content:"";width:22px;height:1px;background:linear-gradient(90deg,transparent,var(--clay));
+}
+.sec-head{max-width:720px;margin-bottom:clamp(32px,4vw,52px)}
+.sec-title{font-size:clamp(1.9rem,3.5vw,3rem);font-weight:800;margin-top:16px}
+.sec-sub{color:var(--muted);margin-top:16px;font-size:clamp(1rem,1.4vw,1.12rem);max-width:640px}
+
+/* nav */
+.nav{
+  position:fixed;inset:0 0 auto 0;z-index:60;
+  background:rgba(251,247,241,.82);
+  -webkit-backdrop-filter:blur(18px) saturate(120%);
+  backdrop-filter:blur(18px) saturate(120%);
+  border-bottom:1px solid var(--line);
+}
+.nav-inner{height:68px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.brand{display:flex;align-items:center;gap:11px;text-decoration:none;font-weight:700;letter-spacing:-.02em;font-size:15px}
+.brand svg{width:30px;height:30px;flex:none}
+.brand .sub{color:var(--faint);font-weight:500;letter-spacing:.01em}
+.nav-links{display:flex;align-items:center;gap:26px}
+.nav-links a{
+  color:var(--muted);text-decoration:none;font-size:14px;font-weight:500;
+  transition:color .2s ease;
+}
+.nav-links a:hover{color:var(--ink)}
+.nav-right{display:flex;align-items:center;gap:14px}
+.lang{
+  display:inline-flex;align-items:center;padding:3px;border-radius:999px;
+  border:1px solid var(--line);background:rgba(255,253,249,.7);
+}
+.lang button{
+  border:0;background:transparent;color:var(--muted);cursor:pointer;
+  padding:5px 10px;border-radius:999px;font-size:12px;font-weight:600;line-height:1;
+  transition:background .2s ease,color .2s ease;
+}
+.lang button[aria-pressed="true"]{background:var(--clay);color:#fff8f0}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  padding:13px 22px;border-radius:999px;border:1px solid transparent;
+  font-size:14.5px;font-weight:600;text-decoration:none;cursor:pointer;
+  transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease,background .2s ease;
+  white-space:nowrap;
+}
+.btn svg{width:17px;height:17px;flex:none}
+.btn-primary{
+  background:linear-gradient(135deg,#a94a24,#b3542c);
+  color:#fff8f0;box-shadow:0 14px 34px -16px rgba(169,74,36,.6);
+}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 20px 42px -16px rgba(169,74,36,.72)}
+.btn-ghost{
+  background:rgba(255,253,249,.8);border-color:var(--line-strong);color:var(--ink);
+}
+.btn-ghost:hover{background:#fffdf9;border-color:var(--clay-soft);transform:translateY(-2px)}
+.btn-sm{padding:9px 16px;font-size:13.5px}
+
+/* hero */
+.hero{position:relative;padding:clamp(120px,13vw,168px) 0 clamp(64px,8vw,104px);overflow:hidden}
+.hero::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(81,49,35,.07) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(81,49,35,.07) 1px,transparent 1px);
+  background-size:64px 64px;
+  -webkit-mask-image:radial-gradient(70% 60% at 50% 30%,#000 0%,transparent 78%);
+  mask-image:radial-gradient(70% 60% at 50% 30%,#000 0%,transparent 78%);
+}
+.hero-ring{
+  position:absolute;z-index:-1;top:-16%;right:-8%;
+  width:620px;height:620px;border-radius:50%;
+  background:conic-gradient(from 180deg,rgba(220,154,104,.38),rgba(243,214,182,.22),rgba(169,74,36,.16),rgba(220,154,104,.38));
+  filter:blur(90px);opacity:.45;animation:spin 30s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.hero-ring{animation:none}}
+.hero-grid{display:grid;grid-template-columns:1.04fr .96fr;gap:clamp(32px,5vw,64px);align-items:center}
+.hero-copy{max-width:620px;grid-column:1;grid-row:1}
+.console-wrap{grid-column:2;grid-row:1 / span 2}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:9px;
+  padding:7px 14px 7px 12px;border-radius:999px;
+  border:1px solid rgba(169,74,36,.28);background:rgba(220,154,104,.18);
+  font-size:12px;font-weight:600;letter-spacing:.06em;color:#8f3b1c;
+}
+.pulse-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(39,113,75,.55);animation:pulseDot 2.4s ease-out infinite}
+@keyframes pulseDot{
+  0%{box-shadow:0 0 0 0 rgba(39,113,75,.5)}
+  70%{box-shadow:0 0 0 9px rgba(39,113,75,0)}
+  100%{box-shadow:0 0 0 0 rgba(39,113,75,0)}
+}
+.hero h1{
+  margin-top:24px;
+  font-size:clamp(2.7rem,5.2vw,4.9rem);
+  font-weight:900;
+  letter-spacing:-.035em;
+  line-height:1.04;
+  color:var(--ink);
+}
+.hero-sub{
+  margin-top:24px;color:var(--muted);
+  font-size:clamp(1.02rem,1.5vw,1.18rem);
+  max-width:560px;
+}
+.hero-actions{display:flex;flex-wrap:wrap;gap:14px;margin-top:32px}
+.hero-note{margin-top:20px;color:var(--faint);font-size:13px;display:flex;align-items:flex-start;gap:8px}
+.hero-note svg{width:15px;height:15px;flex:none;color:var(--green);margin-top:5px}
+.stats{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:0;
+  grid-column:1;grid-row:2;
+  margin-top:0;
+  border-top:1px solid var(--line);
+}
+.stat{padding:18px 20px 0 0}
+.stat + .stat{padding-left:20px;border-left:1px solid var(--line)}
+.stat strong{
+  display:block;font-size:clamp(1.5rem,2.4vw,2rem);font-weight:800;letter-spacing:-.03em;
+  font-variant-numeric:tabular-nums;
+  color:var(--clay);
+}
+.stat span{display:block;margin-top:4px;color:var(--faint);font-size:12.5px;line-height:1.5}
+
+/* console — deliberate dark anchor */
+.console-wrap{position:relative}
+.console-wrap::before{
+  content:"";position:absolute;inset:-18%;z-index:-1;border-radius:50%;
+  background:radial-gradient(closest-side,rgba(169,74,36,.22),transparent 72%);
+  filter:blur(28px);
+}
+.console{
+  position:relative;
+  border-radius:26px;
+  padding:20px;
+  color:var(--cream);
+  background:linear-gradient(162deg,#3a2d22,#2a211b 55%,#241c16);
+  border:1px solid rgba(220,154,104,.24);
+  box-shadow:
+    0 50px 100px -45px rgba(81,49,35,.65),
+    0 0 0 1px rgba(220,154,104,.08) inset,
+    0 1px 0 rgba(255,255,255,.08) inset;
+  transform:perspective(1400px) rotateY(-5deg) rotateX(3deg) rotate(-.4deg);
+  transform-origin:60% 50%;
+}
+.console-bar{display:flex;align-items:center;gap:8px;padding-bottom:14px;border-bottom:1px solid rgba(247,239,228,.10)}
+.dots{display:flex;gap:5px}
+.dots i{width:8px;height:8px;border-radius:50%;background:rgba(247,239,228,.16)}
+.dots i:first-child{background:#e07a5f}
+.dots i:nth-child(2){background:#e8b27a}
+.dots i:nth-child(3){background:#7bd3a4}
+.console-title{margin-left:6px;font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--cream-muted);text-transform:uppercase}
+.live{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:10.5px;letter-spacing:.14em;color:#7bd3a4;font-weight:700}
+.live i{width:6px;height:6px;border-radius:50%;background:#7bd3a4;animation:pulseDot 2s ease-out infinite}
+.call-row{display:flex;align-items:center;gap:12px;padding:16px 4px 0}
+.call-avatar{
+  width:42px;height:42px;border-radius:14px;display:grid;place-items:center;flex:none;
+  background:linear-gradient(145deg,rgba(220,154,104,.28),rgba(169,74,36,.14));
+  border:1px solid rgba(220,154,104,.38);
+}
+.call-avatar svg{width:19px;height:19px;color:#f0c9a6}
+.call-meta{min-width:0}
+.call-meta .who{font-size:13.5px;font-weight:600;letter-spacing:.01em;color:var(--cream)}
+.call-meta .num{font-size:11.5px;color:var(--cream-faint);letter-spacing:.06em;font-variant-numeric:tabular-nums}
+.call-time{margin-left:auto;font-size:11.5px;color:var(--cream-faint);font-variant-numeric:tabular-nums}
+.wave{
+  display:flex;align-items:center;justify-content:center;gap:4px;
+  height:52px;margin:16px 0 6px;
+  padding:0 6px;
+}
+.wave i{
+  display:block;width:4px;border-radius:99px;
+  height:var(--h,40%);
+  background:linear-gradient(180deg,#e8b27a,#c0602f);
+  transform-origin:center;
+  animation:wave 1.6s ease-in-out infinite;
+  animation-delay:var(--d,0ms);
+  opacity:.92;
+}
+@keyframes wave{
+  0%,100%{transform:scaleY(.55)}
+  50%{transform:scaleY(1)}
+}
+.utterance{
+  position:relative;margin-top:8px;padding:16px 18px;
+  border-radius:16px;border:1px solid rgba(247,239,228,.12);
+  background:rgba(247,239,228,.05);
+  min-height:86px;
+}
+.utterance .label{display:block;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--cream-faint);margin-bottom:7px}
+.utterance p{font-size:15.5px;font-weight:500;line-height:1.6;color:var(--cream)}
+.utterance p::before{content:"「";color:var(--apricot)}
+.utterance p::after{content:"」";color:var(--apricot)}
+.router-row{display:flex;align-items:center;gap:10px;margin:14px 2px 10px}
+.router-label{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--cream-faint)}
+.router-line{flex:1;height:1px;background:linear-gradient(90deg,rgba(220,154,104,.45),transparent)}
+.router-model{font-size:10.5px;color:var(--apricot);letter-spacing:.1em}
+.route-list{display:grid;gap:7px}
+.route{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border-radius:12px;
+  border:1px solid transparent;
+  color:#c9b8a6;font-size:13.5px;
+  transition:background .3s ease,border-color .3s ease,color .3s ease,transform .3s ease;
+}
+.route .name{font-weight:500}
+.route .key{font-size:10.5px;color:var(--cream-faint);letter-spacing:.03em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.route .conf{margin-left:auto;font-size:11px;font-variant-numeric:tabular-nums;color:var(--cream-faint);opacity:0;transition:opacity .3s ease}
+.route .tick{
+  width:18px;height:18px;border-radius:50%;flex:none;display:grid;place-items:center;
+  border:1px solid rgba(247,239,228,.18);opacity:.4;transition:all .3s ease;
+}
+.route .tick svg{width:11px;height:11px;opacity:0}
+.route.active{
+  background:linear-gradient(90deg,rgba(220,154,104,.22),rgba(220,154,104,.04));
+  border-color:rgba(220,154,104,.5);
+  color:var(--cream);transform:translateX(2px);
+}
+.route.active .key{color:#f0c9a6}
+.route.active .conf{opacity:1;color:#7bd3a4}
+.route.active .tick{border-color:#7bd3a4;background:rgba(123,211,164,.14);opacity:1}
+.route.active .tick svg{opacity:1;color:#7bd3a4}
+.action-line{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin-top:14px;padding-top:14px;border-top:1px solid rgba(247,239,228,.10);
+}
+.action-line .label{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--cream-faint)}
+.action-line code{
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+  color:#f3d2b4;background:rgba(220,154,104,.10);border:1px solid rgba(220,154,104,.28);
+  padding:3px 8px;border-radius:7px;white-space:nowrap;
+}
+.console-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;font-size:10.5px;color:var(--cream-faint)}
+.console-foot .ok{display:inline-flex;align-items:center;gap:6px;color:#7bd3a4;font-weight:600}
+
+/* marquee */
+.marquee{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:16px 0;overflow:hidden;position:relative;background:rgba(255,253,249,.4)}
+.marquee::before,.marquee::after{
+  content:"";position:absolute;top:0;bottom:0;width:120px;z-index:2;pointer-events:none;
+}
+.marquee::before{left:0;background:linear-gradient(90deg,var(--bg),transparent)}
+.marquee::after{right:0;background:linear-gradient(270deg,var(--bg),transparent)}
+.marquee-track{display:flex;width:max-content;gap:44px;animation:marquee 34s linear infinite}
+.marquee:hover .marquee-track{animation-play-state:paused}
+@keyframes marquee{to{transform:translateX(-50%)}}
+.marquee-item{display:inline-flex;align-items:center;gap:10px;color:var(--faint);font-size:12.5px;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap}
+.marquee-item::before{content:"";width:5px;height:5px;border-radius:50%;background:rgba(169,74,36,.6)}
+@media (prefers-reduced-motion:reduce){.marquee-track{animation:none}}
+
+/* generic cards */
+.card{
+  position:relative;border-radius:var(--radius);
+  border:1px solid var(--line);
+  background:linear-gradient(165deg,#fffdf9,#faf3e8);
+  padding:clamp(20px,2.4vw,30px);
+  box-shadow:0 1px 0 rgba(255,255,255,.85) inset,0 18px 40px -36px rgba(81,49,35,.45);
+  transition:transform .3s ease,border-color .3s ease,box-shadow .3s ease;
+  height:100%;
+}
+.card h3{font-size:1.05rem;font-weight:700;margin-bottom:9px}
+.card p{color:var(--muted);font-size:14px;line-height:1.7}
+.card .top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.icon{
+  width:42px;height:42px;border-radius:13px;flex:none;display:grid;place-items:center;
+  background:linear-gradient(145deg,rgba(220,154,104,.32),rgba(169,74,36,.08));
+  border:1px solid rgba(169,74,36,.22);color:#8f3b1c;
+}
+.icon svg{width:19px;height:19px}
+@media (hover:hover){
+  .card:hover{transform:translateY(-4px);border-color:rgba(169,74,36,.38);box-shadow:0 26px 50px -34px rgba(81,49,35,.55)}
+}
+
+/* compare */
+.compare-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.compare-card{display:flex;flex-direction:column;gap:16px}
+.compare-card .tier{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.compare-card h3{font-size:1.18rem}
+.compare-card ul{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+.compare-card li{display:flex;gap:9px;font-size:13.5px;color:var(--muted);line-height:1.6}
+.compare-card li::before{content:"";width:5px;height:5px;border-radius:50%;background:rgba(81,49,35,.28);flex:none;margin-top:8px}
+.compare-card .foot{margin-top:auto;padding-top:16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--faint)}
+.compare-card.ours{
+  border-color:rgba(169,74,36,.35);
+  background:
+    radial-gradient(120% 80% at 0% 0%,rgba(220,154,104,.24),transparent 60%),
+    linear-gradient(165deg,#fffaf3,#fbf0e2);
+  box-shadow:0 30px 60px -40px rgba(169,74,36,.42);
+}
+.compare-card.ours .tier{color:var(--clay)}
+.compare-card.ours li{color:#5c4d40}
+.compare-card.ours li::before{background:var(--green)}
+.compare-card.ours .foot{color:#8f3b1c}
+
+/* features */
+.feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+
+/* flow */
+.flow{position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:8px}
+.flow::before{
+  content:"";position:absolute;left:2%;right:2%;top:22px;height:1px;
+  background:linear-gradient(90deg,rgba(169,74,36,0),rgba(169,74,36,.45),rgba(201,122,85,.5),rgba(169,74,36,0));
+}
+.flow-step{position:relative;padding-top:52px}
+.flow-num{
+  position:absolute;top:0;left:0;width:44px;height:44px;border-radius:14px;
+  display:grid;place-items:center;font-size:12px;font-weight:700;letter-spacing:.06em;
+  color:#8f3b1c;background:var(--surface);border:1px solid rgba(169,74,36,.35);
+  box-shadow:0 0 0 6px var(--bg);
+}
+.flow-step h3{font-size:1rem;margin-bottom:8px}
+.flow-step p{color:var(--muted);font-size:13.5px}
+.flow-step code{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#8f3b1c}
+.flow-note{
+  margin-top:32px;padding:16px 20px;border-radius:14px;
+  border:1px solid var(--line);background:rgba(255,253,249,.7);
+  color:var(--muted);font-size:13.5px;display:flex;gap:12px;align-items:flex-start;
+}
+.flow-note svg{width:17px;height:17px;flex:none;color:var(--clay);margin-top:3px}
+
+/* demo */
+.demo-shell{
+  display:grid;grid-template-columns:.86fr 1.14fr;gap:clamp(20px,3vw,32px);
+  align-items:start;
+}
+.demo-rail{display:grid;gap:10px}
+.demo-case{
+  position:relative;text-align:left;width:100%;cursor:pointer;
+  border-radius:16px;border:1px solid var(--line);
+  background:var(--surface);
+  padding:15px 16px 15px 44px;
+  transition:background .25s ease,border-color .25s ease,transform .25s ease;
+}
+.demo-case .n{
+  position:absolute;left:14px;top:15px;font-size:11px;font-weight:700;color:var(--faint);
+  font-variant-numeric:tabular-nums;letter-spacing:.06em;
+}
+.demo-case .q{display:block;font-size:13.5px;line-height:1.55;color:var(--muted);font-weight:500}
+.demo-case .r{display:block;margin-top:6px;font-size:10.5px;letter-spacing:.08em;color:var(--faint);font-family:ui-monospace,Menlo,monospace}
+.demo-case[aria-selected="true"]{
+  background:linear-gradient(100deg,rgba(220,154,104,.28),rgba(220,154,104,.07));
+  border-color:rgba(169,74,36,.45);transform:translateX(4px);
+}
+.demo-case[aria-selected="true"] .q{color:var(--ink)}
+.demo-case[aria-selected="true"] .n{color:var(--clay)}
+.demo-case[aria-selected="true"] .r{color:#8f3b1c}
+.demo-console{
+  border-radius:22px;border:1px solid var(--line);
+  background:linear-gradient(170deg,#fffdf9,#f9f1e5);
+  box-shadow:var(--shadow);padding:clamp(18px,2.4vw,26px);
+  min-height:420px;
+}
+.demo-head{display:flex;align-items:center;gap:10px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.demo-head .k{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.demo-head .mode{margin-left:auto;font-size:10.5px;letter-spacing:.12em;color:var(--clay);font-family:ui-monospace,Menlo,monospace}
+.demo-flow{display:grid;gap:0;margin-top:14px}
+.demo-block{position:relative;padding:12px 0 16px;border-bottom:1px dashed rgba(81,49,35,.16)}
+.demo-block:last-of-type{border-bottom:0}
+.demo-block .label{display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-bottom:8px}
+.demo-block .label b{color:var(--clay);font-weight:600;letter-spacing:.02em;font-family:ui-monospace,Menlo,monospace;text-transform:none;font-size:10.5px}
+.demo-transcript{font-size:15px;color:var(--ink);line-height:1.6;min-height:52px}
+.demo-transcript .muted{color:var(--faint);font-style:italic}
+.demo-transcript .caret{display:inline-block;width:7px;height:15px;background:var(--clay);margin-left:2px;vertical-align:-2px;animation:caret 1.1s steps(1) infinite}
+@keyframes caret{50%{opacity:0}}
+.demo-result{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.demo-desc{margin-top:10px;color:var(--faint);font-size:12.5px;line-height:1.5;min-height:19px}
+.route-chip{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:7px 13px;border-radius:999px;
+  border:1px solid rgba(169,74,36,.3);background:rgba(169,74,36,.08);
+  font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#8f3b1c;
+}
+.route-chip::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--clay)}
+.path-badge{
+  display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;
+  font-size:10.5px;font-weight:700;letter-spacing:.08em;
+  border:1px solid rgba(39,113,75,.32);background:rgba(39,113,75,.08);color:var(--green);
+}
+.path-badge.fallback{border-color:rgba(138,83,8,.32);background:rgba(138,83,8,.08);color:var(--amber)}
+.path-badge.reason{border-color:rgba(158,70,34,.32);background:rgba(158,70,34,.08);color:var(--rose)}
+.conf-wrap{display:flex;align-items:center;gap:10px;margin-top:12px}
+.conf-bar{position:relative;flex:1;height:6px;border-radius:99px;background:rgba(81,49,35,.12);overflow:hidden}
+.conf-fill{position:absolute;inset:0 100% 0 0;border-radius:99px;background:linear-gradient(90deg,#a94a24,#dc9a68);transition:right .5s cubic-bezier(.2,.8,.2,1)}
+.conf-threshold{position:absolute;top:-4px;bottom:-4px;left:70%;width:1px;background:rgba(138,83,8,.7)}
+.conf-val{font-size:11px;font-variant-numeric:tabular-nums;color:var(--muted);min-width:62px;text-align:right}
+.conf-val em{font-style:normal;color:var(--faint)}
+.demo-action{
+  margin-top:14px;border-radius:12px;border:1px solid rgba(169,74,36,.18);
+  background:rgba(220,154,104,.12);padding:11px 14px;
+  font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:#7a3a1e;
+  overflow-x:auto;white-space:nowrap;
+}
+.demo-controls{display:flex;align-items:center;gap:10px;margin-top:16px}
+.demo-controls .spacer{flex:1}
+.icon-btn{
+  width:36px;height:36px;border-radius:11px;border:1px solid var(--line);
+  background:var(--surface);display:grid;place-items:center;cursor:pointer;
+  transition:background .2s ease,border-color .2s ease;
+}
+.icon-btn:hover{background:#f8efe3;border-color:var(--clay-soft)}
+.icon-btn svg{width:15px;height:15px}
+.demo-note{margin-top:14px;font-size:11.5px;color:var(--faint);line-height:1.6}
+
+/* pull quote */
+.pull{padding:clamp(48px,6vw,84px) 0}
+.pull blockquote{
+  margin:0 auto;max-width:920px;text-align:center;
+  font-size:clamp(1.3rem,2.6vw,2.1rem);line-height:1.45;font-weight:700;letter-spacing:-.02em;
+}
+.pull blockquote span{color:var(--clay)}
+.pull .by{display:block;margin-top:18px;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);font-weight:600}
+
+/* code — deliberate dark anchor */
+.code-grid{display:grid;grid-template-columns:1fr 1fr;gap:clamp(20px,3vw,36px);align-items:center}
+.code-card{
+  border-radius:18px;border:1px solid rgba(220,154,104,.22);
+  background:#2a211b;box-shadow:0 30px 70px -40px rgba(81,49,35,.6);overflow:hidden;
+}
+.code-bar{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid rgba(247,239,228,.10);background:rgba(247,239,228,.03)}
+.code-bar .file{margin-left:6px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#c9b8a6}
+.code-bar .tag{margin-left:auto;font-size:9.5px;letter-spacing:.14em;color:var(--cream-faint);border:1px solid rgba(247,239,228,.16);padding:2px 7px;border-radius:99px}
+.code-body{margin:0;padding:18px 18px 22px;overflow-x:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.75;color:#e8dccb}
+.code-body .ln{display:inline-block;width:22px;color:#6b5d50;user-select:none;text-align:right;margin-right:14px}
+.tk-key{color:#f0b77e}.tk-str{color:#bbd8a3}.tk-var{color:#e8c0ae}.tk-num{color:#f2c879}.tk-com{color:#9c8b7a}.tk-punc{color:#b9aa98}.tk-fn{color:#e8c4a0}
+.code-side{display:grid;gap:12px}
+.action-card{display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:14px;border:1px solid var(--line);background:var(--surface)}
+.action-card code{font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#8f3b1c;min-width:104px}
+.action-card p{font-size:13px;color:var(--muted);line-height:1.55}
+.action-card .dot{width:8px;height:8px;border-radius:50%;flex:none}
+
+/* fit */
+.fit-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.fit-card ul{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:12px}
+.fit-card li{display:flex;gap:11px;font-size:14px;color:var(--muted);line-height:1.6}
+.fit-card li svg{width:18px;height:18px;flex:none;margin-top:3px}
+.fit-card.yes li svg{color:var(--green)}
+.fit-card.no li svg{color:#a08c7a}
+
+/* scenarios */
+.scene-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+.scene{display:flex;gap:18px;align-items:flex-start}
+.scene .idx{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--faint);font-variant-numeric:tabular-nums;padding-top:4px}
+.scene h3{font-size:1.05rem}
+.scene p{font-size:13.5px;color:var(--muted);margin-top:7px}
+.scene .quote{
+  display:inline-block;margin-top:12px;padding:6px 11px;border-radius:9px;
+  background:rgba(220,154,104,.18);border:1px solid rgba(169,74,36,.18);
+  font-size:12px;color:#8f3b1c;
+}
+
+/* quickstart */
+.start-grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:clamp(20px,3vw,40px);align-items:center}
+.term{border-radius:18px;border:1px solid rgba(220,154,104,.22);background:#2a211b;overflow:hidden;box-shadow:0 30px 70px -40px rgba(81,49,35,.6)}
+.term-bar{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid rgba(247,239,228,.10);background:rgba(247,239,228,.03)}
+.term-bar .t{margin-left:6px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#c9b8a6}
+.term-bar .copy{margin-left:auto;border:1px solid rgba(247,239,228,.18);background:rgba(247,239,228,.05);color:#d8c9b8;border-radius:8px;padding:4px 10px;font-size:11px;cursor:pointer;transition:all .2s ease}
+.term-bar .copy:hover{color:#f7efe4;border-color:var(--apricot)}
+.term pre{margin:0;padding:18px;overflow-x:auto;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;line-height:2;color:#e8dccb}
+.term .p{color:#7bd3a4;user-select:none}
+.term .c{color:#9c8b7a}
+.start-list{list-style:none;margin:22px 0 0;padding:0;display:grid;gap:12px}
+.start-list li{display:flex;gap:10px;font-size:13.5px;color:var(--muted)}
+.start-list b{color:var(--ink);font-weight:600}
+.start-list .n{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--clay);flex:none;padding-top:2px}
+
+/* cta */
+.cta{position:relative;padding:clamp(56px,7vw,96px) 0 0}
+.cta-card{
+  position:relative;text-align:center;border-radius:30px;overflow:hidden;
+  padding:clamp(38px,6vw,72px) clamp(22px,4vw,56px);
+  border:1px solid rgba(143,59,28,.45);
+  color:#fff8f0;
+  background:
+    radial-gradient(80% 120% at 50% 0%,rgba(220,154,104,.18),transparent 62%),
+    radial-gradient(60% 100% at 80% 100%,rgba(255,228,196,.08),transparent 60%),
+    linear-gradient(165deg,#7f3519,#8f3b1c 55%,#6f2c14);
+  box-shadow:0 40px 100px -55px rgba(143,59,28,.7);
+}
+.cta-card h2{font-size:clamp(1.8rem,3.6vw,3rem);font-weight:900;letter-spacing:-.03em}
+.cta-card p{color:#faece0;margin:16px auto 0;max-width:560px;font-size:15px}
+.cta-card .btn{margin-top:28px}
+.cta-card .btn-primary{background:#fff8f0;color:#8f3b1c;box-shadow:0 16px 36px -18px rgba(42,33,27,.5)}
+.cta-card .btn-primary:hover{background:#ffffff;box-shadow:0 20px 44px -18px rgba(42,33,27,.55)}
+.cta-meta{margin-top:16px;font-size:12px;color:#fbeade;letter-spacing:.04em}
+
+/* footer */
+.footer{padding:48px 0 56px;border-top:1px solid var(--line);margin-top:clamp(56px,7vw,96px)}
+.footer-top{display:flex;justify-content:space-between;gap:28px;flex-wrap:wrap}
+.footer .brand{font-size:14px}
+.footer-desc{color:var(--faint);font-size:12.5px;max-width:420px;line-height:1.7;margin-top:12px}
+.footer-links{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.footer-links a{color:var(--muted);font-size:13px;text-decoration:none}
+.footer-links a:hover{color:var(--ink)}
+.footer-bot{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:32px;padding-top:20px;border-top:1px solid var(--line);color:var(--faint);font-size:11.5px;letter-spacing:.04em}
+.footer-bot .built{color:var(--faint)}
+.footer-bot .built b{color:var(--muted);font-weight:600}
+
+/* reveal */
+html.js .reveal{opacity:0;transform:translateY(20px);transition:opacity .75s cubic-bezier(.2,.7,.2,1),transform .75s cubic-bezier(.2,.7,.2,1)}
+html.js .reveal.in{opacity:1;transform:none}
+
+/* responsive */
+@media (max-width:1024px){
+  .nav-links{display:none}
+  .hero-grid{grid-template-columns:1fr;gap:48px}
+  .hero-copy{max-width:none}
+  .hero-copy,.console-wrap,.stats{grid-column:auto;grid-row:auto}
+  .console{transform:none}
+  .console-wrap{max-width:620px;margin-inline:auto;width:100%}
+  .feature-grid{grid-template-columns:repeat(2,1fr)}
+  .flow{grid-template-columns:repeat(2,1fr);gap:32px 18px}
+  .flow::before{display:none}
+  .demo-shell{grid-template-columns:1fr}
+  .demo-rail{grid:auto-flow / auto-cols:min(78vw,360px);grid-auto-flow:column;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:8px}
+  .demo-case{scroll-snap-align:start}
+  .code-grid,.start-grid{grid-template-columns:1fr}
+  .compare-grid{grid-template-columns:1fr;gap:14px}
+  .scene-grid{grid-template-columns:1fr}
+}
+@media (max-width:720px){
+  .container{width:calc(100% - 36px)}
+  .nav-inner{height:60px}
+  .brand .sub{display:none}
+  .nav-right .btn span{display:none}
+  .hero{padding-top:104px}
+  .hero h1{font-size:clamp(2.4rem,11vw,3.3rem)}
+  .stats{grid-template-columns:repeat(2,1fr);row-gap:0}
+  .stat{padding:14px 0 14px 0}
+  .stat + .stat{padding-left:0}
+  .stat:nth-child(even){padding-left:18px;border-left:1px solid var(--line)}
+  .stat:nth-child(n+3){border-top:1px solid var(--line)}
+  .feature-grid{grid-template-columns:1fr}
+  .flow{grid-template-columns:1fr}
+  .demo-console{min-height:0;padding:16px}
+  .demo-case{width:min(78vw,360px)}
+  .demo-case[aria-selected="true"]{transform:none}
+  .fit-grid{grid-template-columns:1fr}
+  .footer-top{flex-direction:column}
+  .pull blockquote{font-size:1.35rem}
+  .term pre{font-size:11.5px}
+}
+@media (max-width:420px){
+  .hero-actions .btn{flex:1 1 100%}
+  .console{padding:14px}
+  .route{font-size:12.5px}
+  .action-line code{font-size:11px}
+}
+@media (hover:none){
+  .card:hover{transform:none}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  html.js .reveal{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main" data-i18n="a11y.skip">跳至主要內容</a>
+
+<nav class="nav" aria-label="主要導覽" data-i18n-aria="a11y.nav">
+  <div class="container nav-inner">
+    <a class="brand" href="#top" aria-label="jev-call-router 首頁" data-i18n-aria="a11y.home">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <defs>
+          <linearGradient id="logo-g" x1="0" y1="0" x2="32" y2="32">
+            <stop offset="0" stop-color="#a94a24"/>
+            <stop offset="1" stop-color="#dc9a68"/>
+          </linearGradient>
+        </defs>
+        <path d="M8.2 5.5c-1.5 0-2.7 1.2-2.7 2.7 0 9 7.3 16.3 16.3 16.3 1.5 0 2.7-1.2 2.7-2.7v-3.2c0-.7-.5-1.3-1.2-1.5l-3.5-.9c-.6-.2-1.3 0-1.7.5l-1.5 1.8c-3.1-1.6-5.7-4.2-7.3-7.3l1.8-1.5c.5-.4.7-1.1.5-1.7l-.9-3.5c-.2-.7-.8-1.2-1.5-1.2H8.2Z" fill="none" stroke="url(#logo-g)" stroke-width="2" stroke-linejoin="round"/>
+        <circle cx="25.4" cy="23.6" r="2.2" fill="#dc9a68"/>
+        <circle cx="21.4" cy="27.4" r="1.4" fill="#a94a24"/>
+      </svg>
+      <span>jev-call-router <span class="sub">/ by a-lang</span></span>
+    </a>
+    <div class="nav-links">
+      <a href="#features" data-i18n="nav.features">功能</a>
+      <a href="#how" data-i18n="nav.how">運作方式</a>
+      <a href="#demo" data-i18n="nav.demo">六句話</a>
+      <a href="#quickstart" data-i18n="nav.quickstart">快速開始</a>
+    </div>
+    <div class="nav-right">
+      <div class="lang" role="group" aria-label="語言切換 / Language" data-i18n-aria="a11y.lang">
+        <button type="button" data-lang="zh" aria-pressed="true">中</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </div>
+      <a class="btn btn-ghost btn-sm" href="https://github.com/a-lang/jev-call-router" target="_blank" rel="noopener" aria-label="GitHub repository">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM18 9a9 9 0 0 1-9 9"/></svg>
+        <span>GitHub</span>
+      </a>
+    </div>
+  </div>
+</nav>
+
+<main id="main">
+<section class="hero" id="top">
+  <div class="hero-ring" aria-hidden="true"></div>
+  <div class="container hero-grid">
+    <div class="hero-copy">
+      <span class="hero-badge"><i class="pulse-dot"></i>Open source · MIT · Bun + Asterisk</span>
+      <h1 data-i18n="hero.title">智慧分流，<br><span class="grad">不該靠按鍵。</span></h1>
+      <p class="hero-sub" data-i18n="hero.sub">讓來電者說一句話，就能接到正確的佇列或分機。Jev 只從你定義的路線裡選一條，PBX 保留最後的執行權。</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="https://github.com/a-lang/jev-call-router" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .8a11.2 11.2 0 0 0-3.5 21.8c.6.1.8-.2.8-.5v-2c-3.1.7-3.8-1.3-3.8-1.3-.5-1.3-1.3-1.6-1.3-1.6-1-.7.1-.7.1-.7 1.1.1 1.7 1.1 1.7 1.1 1 1.7 2.7 1.2 3.3.9.1-.8.4-1.2.7-1.5-2.5-.3-5.1-1.2-5.1-5.5 0-1.2.4-2.2 1.1-3-.1-.3-.5-1.4.1-3 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.7.1 3 .7.8 1.1 1.8 1.1 3 0 4.3-2.6 5.2-5.1 5.5.4.3.7 1 .7 2v3c0 .3.2.6.8.5A11.2 11.2 0 0 0 12 .8Z"/></svg>
+          <span data-i18n="hero.cta1">在 GitHub 上查看</span>
+        </a>
+        <a class="btn btn-ghost" href="#how" data-i18n="hero.cta2">看它怎麼運作</a>
+      </div>
+      <p class="hero-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg>
+        <span data-i18n="hero.note">開源 MIT · 不必重寫 dialplan · 失敗一律有 fallback</span>
+      </p>
+    </div>
+
+    <div class="console-wrap reveal">
+      <div class="console">
+        <div class="console-bar">
+          <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+          <span class="console-title">jev-router</span>
+          <span class="live"><i></i>LIVE</span>
+        </div>
+        <div class="call-row">
+          <div class="call-avatar" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6.5 3.5A1.5 1.5 0 0 0 5 5c0 8.3 6.7 15 15 15a1.5 1.5 0 0 0 1.5-1.5v-2.4c0-.7-.5-1.3-1.2-1.4l-3-.8c-.6-.2-1.3 0-1.7.5l-1.2 1.4a13.4 13.4 0 0 1-5.7-5.7l1.4-1.2c.5-.4.7-1.1.5-1.7l-.8-3C9.2 4 8.6 3.5 7.9 3.5H6.5Z"/></svg>
+          </div>
+          <div class="call-meta">
+            <div class="who" data-i18n="hero.console.incoming">來電 · 02 1234 5678</div>
+            <div class="num">INBOUND / DID</div>
+          </div>
+          <div class="call-time">9:41</div>
+        </div>
+        <div class="wave" aria-hidden="true">
+          <i style="--h:34%;--d:0ms"></i><i style="--h:62%;--d:120ms"></i>
+          <i style="--h:88%;--d:240ms"></i><i style="--h:48%;--d:360ms"></i>
+          <i style="--h:100%;--d:80ms"></i><i style="--h:72%;--d:200ms"></i>
+          <i style="--h:38%;--d:320ms"></i><i style="--h:94%;--d:440ms"></i>
+          <i style="--h:56%;--d:160ms"></i><i style="--h:82%;--d:280ms"></i>
+          <i style="--h:44%;--d:400ms"></i><i style="--h:66%;--d:520ms"></i>
+        </div>
+        <div class="utterance">
+          <span class="label" data-i18n="hero.console.said">來電者說</span>
+          <p id="hero-utterance">我上週訂的耳機還沒到，想問什麼時候會出貨</p>
+        </div>
+        <div class="router-row">
+          <span class="router-label" data-i18n="hero.console.jev">Jev 分類</span>
+          <span class="router-line" aria-hidden="true"></span>
+          <span class="router-model">jev-latest</span>
+        </div>
+        <div class="route-list" id="hero-routes">
+          <div class="route" data-route="order-status">
+            <span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m5 13 4 4L19 7"/></svg></span>
+            <span class="name" data-i18n="hero.route1">訂單進度</span>
+            <span class="key">order-status</span>
+            <span class="conf">0.94</span>
+          </div>
+          <div class="route" data-route="returns">
+            <span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m5 13 4 4L19 7"/></svg></span>
+            <span class="name" data-i18n="hero.route2">退換貨</span>
+            <span class="key">returns</span>
+            <span class="conf">0.93</span>
+          </div>
+          <div class="route" data-route="product">
+            <span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m5 13 4 4L19 7"/></svg></span>
+            <span class="name" data-i18n="hero.route3">商品諮詢</span>
+            <span class="key">product</span>
+            <span class="conf">0.91</span>
+          </div>
+          <div class="route" data-route="human-agent">
+            <span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m5 13 4 4L19 7"/></svg></span>
+            <span class="name" data-i18n="hero.route4">真人客服</span>
+            <span class="key">human-agent</span>
+            <span class="conf">0.88</span>
+          </div>
+        </div>
+        <div class="action-line">
+          <span class="label" data-i18n="hero.console.action">執行</span>
+          <code id="hero-action">transfer("ext-queues,300,1")</code>
+        </div>
+        <div class="console-foot">
+          <span data-i18n="hero.console.foot">白名單動作 · 不會產生 routes 以外的指令</span>
+          <span class="ok" data-i18n="hero.console.ok">已轉接</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><strong>3</strong><span data-i18n="hero.stat1">種可執行動作</span></div>
+      <div class="stat"><strong>0</strong><span data-i18n="hero.stat2">自由生成的 PBX 指令</span></div>
+      <div class="stat"><strong>1</strong><span data-i18n="hero.stat3">份 routes 設定</span></div>
+      <div class="stat"><strong>3–6</strong><span data-i18n="hero.stat4">建議意圖類別</span></div>
+    </div>
+  </div>
+</section>
+
+<div class="marquee" aria-hidden="true">
+  <div class="marquee-track">
+    <span class="marquee-item">Bun 1.3+</span>
+    <span class="marquee-item">TypeScript</span>
+    <span class="marquee-item">Asterisk 16+</span>
+    <span class="marquee-item">FreePBX 16 / 17</span>
+    <span class="marquee-item">Jev by TypeSafe AI</span>
+    <span class="marquee-item">ARI / Stasis</span>
+    <span class="marquee-item">SSE events</span>
+    <span class="marquee-item">HMAC webhook</span>
+    <span class="marquee-item">MIT License</span>
+    <span class="marquee-item">Bun 1.3+</span>
+    <span class="marquee-item">TypeScript</span>
+    <span class="marquee-item">Asterisk 16+</span>
+    <span class="marquee-item">FreePBX 16 / 17</span>
+    <span class="marquee-item">Jev by TypeSafe AI</span>
+    <span class="marquee-item">ARI / Stasis</span>
+    <span class="marquee-item">SSE events</span>
+    <span class="marquee-item">HMAC webhook</span>
+    <span class="marquee-item">MIT License</span>
+  </div>
+</div>
+
+<section class="section" aria-labelledby="compare-title">
+  <div class="container">
+    <div class="sec-head reveal">
+      <span class="eyebrow" data-i18n="compare.eyebrow">Three ways to answer a call</span>
+      <h2 class="sec-title" id="compare-title" data-i18n="compare.title">同一通電話，三種做法</h2>
+      <p class="sec-sub" data-i18n="compare.sub">一邊是背按鍵，一邊是把任意指令交給模型。這個專案走第三條路：把「理解」和「執行」分開。</p>
+    </div>
+    <div class="compare-grid">
+      <article class="card compare-card reveal">
+        <span class="tier">Traditional IVR</span>
+        <h3 data-i18n="compare.ivr.title">傳統按鍵 IVR</h3>
+        <ul>
+          <li data-i18n="compare.ivr.b1">來電者要記住按鍵，選單越長越容易按錯</li>
+          <li data-i18n="compare.ivr.b2">聽完整段選單才知道自己要按哪一鍵</li>
+          <li data-i18n="compare.ivr.b3">改流程就要改 dialplan，維護成本高</li>
+          <li data-i18n="compare.ivr.b4">選單外的問題完全接不住</li>
+        </ul>
+        <div class="foot" data-i18n="compare.ivr.foot">可預測，但體驗停在二十年前。</div>
+      </article>
+      <article class="card compare-card reveal">
+        <span class="tier">LLM controls the PBX</span>
+        <h3 data-i18n="compare.llm.title">讓 LLM 直接控制 PBX</h3>
+        <ul>
+          <li data-i18n="compare.llm.b1">自然對話，但輸出不受限制</li>
+          <li data-i18n="compare.llm.b2">模型可能生成不存在的分機或指令</li>
+          <li data-i18n="compare.llm.b3">出錯時難以解釋，也難以重現</li>
+          <li data-i18n="compare.llm.b4">prompt 越調越長，穩定性越難保證</li>
+        </ul>
+        <div class="foot" data-i18n="compare.llm.foot">自由，但把交換機的入口交給了生成模型。</div>
+      </article>
+      <article class="card compare-card ours reveal">
+        <span class="tier">jev-call-router</span>
+        <h3 data-i18n="compare.ours.title">自然語言 + 白名單</h3>
+        <ul>
+          <li data-i18n="compare.ours.b1">來電者自然說一句話，不必記按鍵</li>
+          <li data-i18n="compare.ours.b2">Jev 只能從你定義的 routes 挑一個</li>
+          <li data-i18n="compare.ours.b3">清單外的值判為 invalid-decision 並 fallback</li>
+          <li data-i18n="compare.ours.b4">每通電話都有結構化結果與事件</li>
+        </ul>
+        <div class="foot" data-i18n="compare.ours.foot">體驗像對話，執行像 IVR 一樣可預測。</div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="features" aria-labelledby="features-title">
+  <div class="container">
+    <div class="sec-head reveal">
+      <span class="eyebrow" data-i18n="features.eyebrow">Core features</span>
+      <h2 class="sec-title" id="features-title" data-i18n="features.title">把「理解」交給模型，把「執行」留在 PBX</h2>
+      <p class="sec-sub" data-i18n="features.sub">六個設計決定，讓自然語言分流不再是一次賭注。</p>
+    </div>
+    <div class="feature-grid">
+      <article class="card reveal">
+        <div class="top">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5.5h16v11H9l-4 3.5v-3.5H4z"/><path d="M8 9.5h8M8 12.5h5"/></svg></div>
+        </div>
+        <h3 data-i18n="f1.title">自然語言分流</h3>
+        <p data-i18n="f1.desc">來電者不必聽完選單，直接說出目的。STT 轉成文字後才進入判斷，流程仍是「播放 → 錄音 → 判斷」。</p>
+      </article>
+      <article class="card reveal">
+        <div class="top">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 6h10M9 12h10M9 18h10"/><path d="m3.5 6 1.2 1.2L7 4.9M3.5 12l1.2 1.2L7 10.9M3.5 18l1.2 1.2L7 16.9"/></svg></div>
+        </div>
+        <h3 data-i18n="f2.title">選擇題式判斷</h3>
+        <p data-i18n="f2.desc">Jev 只回傳「哪一條 route」與信心分數，不生成自由文字。清單外的輸出會被直接拒絕。</p>
+      </article>
+      <article class="card reveal">
+        <div class="top">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3.5 19 6v6c0 4.2-2.9 7.1-7 8.5-4.1-1.4-7-4.3-7-8.5V6l7-2.5Z"/><path d="m8.5 12 2.5 2.5 4.5-4.5"/></svg></div>
+        </div>
+        <h3 data-i18n="f3.title">三種白名單動作</h3>
+        <p data-i18n="f3.desc">只有轉接、回到 dialplan、掛斷三種。Jev 不碰 ARI、不產生 dialplan、也無法指定清單外的分機。</p>
+      </article>
+      <article class="card reveal">
+        <div class="top">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 5v6a4 4 0 0 0 4 4h6"/><path d="m12 12 3 3-3 3"/><circle cx="5" cy="4" r="1.6"/><path d="M15 8.5h4M15 15h4M15 21h4"/></svg></div>
+        </div>
+        <h3 data-i18n="f4.title">分層 fallback</h3>
+        <p data-i18n="f4.desc">信心不足先重問；逾時、服務中斷、聽不懂走 fallbackRoute；連續靜音可用原因碼另行改道。</p>
+      </article>
+      <article class="card reveal">
+        <div class="top">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 3 5 13h5l-1 8 8-10h-5l1-8Z"/></svg></div>
+        </div>
+        <h3 data-i18n="f5.title">直通規則優先</h3>
+        <p data-i18n="f5.desc">routeDirectly() 在 Jev 之前執行。VIP、營業時間、特定來電號碼不會被模型改寫。</p>
+      </article>
+      <article class="card reveal">
+        <div class="top">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l2-5 4 10 2-5h6"/><circle cx="3" cy="12" r="0"/></svg></div>
+        </div>
+        <h3 data-i18n="f6.title">可觀測性</h3>
+        <p data-i18n="f6.desc">每通電話都有 RoutingResult、SSE 事件與可選的 HMAC-SHA256 webhook，能直接送進 CRM 或 dashboard。</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="how" aria-labelledby="how-title">
+  <div class="container">
+    <div class="sec-head reveal">
+      <span class="eyebrow" data-i18n="how.eyebrow">How a call flows</span>
+      <h2 class="sec-title" id="how-title" data-i18n="how.title">一通電話，四個步驟</h2>
+      <p class="sec-sub" data-i18n="how.sub">從 Stasis 接手到執行轉接，每一步都只有一種工作，也都有明確的失敗出口。</p>
+    </div>
+    <div class="flow">
+      <div class="flow-step reveal">
+        <span class="flow-num">01</span>
+        <h3 data-i18n="how.s1.title">PBX 接手通話</h3>
+        <p data-i18n="how.s1.desc">dialplan 用 Stasis(jev-router) 把通道交給 router，並可帶入 key=value 變數供直通規則使用。</p>
+      </div>
+      <div class="flow-step reveal">
+        <span class="flow-num">02</span>
+        <h3 data-i18n="how.s2.title">播放・錄音・轉寫</h3>
+        <p data-i18n="how.s2.desc">播放問候、錄下來電者的話，交給任何 OpenAI 相容的 STT，或 ElevenLabs Scribe。</p>
+      </div>
+      <div class="flow-step reveal">
+        <span class="flow-num">03</span>
+        <h3 data-i18n="how.s3.title">Jev 從 routes 選一條</h3>
+        <p data-i18n="how.s3.desc">只有寫了 description 的 route 會被提供給 Jev。回傳 route 名稱與信心分數，信心門檻預設 0.7。</p>
+      </div>
+      <div class="flow-step reveal">
+        <span class="flow-num">04</span>
+        <h3 data-i18n="how.s4.title">執行動作或 fallback</h3>
+        <p data-i18n="how.s4.desc">達標就轉接、回 dialplan 或掛斷；任何階段失敗都走你指定的 fallback，不會落到無人接手的通道。</p>
+      </div>
+    </div>
+    <div class="flow-note reveal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4.5M12 16h.01"/></svg>
+      <span data-i18n="how.note">Stasis() 的下一行就是保底目的地：router 沒跑、連線中斷或動作失敗時，通話會回到 dialplan 的指定位置。</span>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="demo" aria-labelledby="demo-title">
+  <div class="container">
+    <div class="sec-head reveal">
+      <span class="eyebrow" data-i18n="demo.eyebrow">Real callers, real routes</span>
+      <h2 class="sec-title" id="demo-title" data-i18n="demo.title">六句話，六條路</h2>
+      <p class="sec-sub" data-i18n="demo.sub">這六句台詞全部來自 README 的電商客服範例。切換看看每一句會被分到哪裡、執行了什麼動作。</p>
+    </div>
+
+    <div class="demo-shell reveal">
+      <div class="demo-rail" role="tablist" aria-label="六個來電範例" aria-orientation="vertical" data-i18n-aria="a11y.demoRail">
+        <button class="demo-case" role="tab" aria-selected="true" data-index="0" aria-controls="demo-console">
+          <span class="n">01</span><span class="q">我上週訂的耳機還沒到，想問什麼時候會出貨</span><span class="r">order-status</span>
+        </button>
+        <button class="demo-case" role="tab" aria-selected="false" data-index="1" aria-controls="demo-console">
+          <span class="n">02</span><span class="q">我要退貨，訂單編號 A12345</span><span class="r">returns</span>
+        </button>
+        <button class="demo-case" role="tab" aria-selected="false" data-index="2" aria-controls="demo-console">
+          <span class="n">03</span><span class="q">這雙鞋有 26 公分的嗎？</span><span class="r">product</span>
+        </button>
+        <button class="demo-case" role="tab" aria-selected="false" data-index="3" aria-controls="demo-console">
+          <span class="n">04</span><span class="q">我要找真人客服</span><span class="r">human-agent</span>
+        </button>
+        <button class="demo-case" role="tab" aria-selected="false" data-index="4" aria-controls="demo-console">
+          <span class="n">05</span><span class="q">請問你們過年有營業嗎？</span><span class="r">human-agent · no-matching-route</span>
+        </button>
+        <button class="demo-case" role="tab" aria-selected="false" data-index="5" aria-controls="demo-console">
+          <span class="n">06</span><span class="q">（連續靜音，沒有說話）</span><span class="r">hangup · no-speech</span>
+        </button>
+      </div>
+
+      <div class="demo-console" id="demo-console" role="tabpanel">
+        <div class="demo-head">
+          <span class="k" data-i18n="demo.live">Live routing</span>
+          <span class="mode">jev-router · <span id="demo-count">01 / 06</span></span>
+        </div>
+        <div class="demo-flow">
+          <div class="demo-block">
+            <div class="label"><span data-i18n="demo.step1">01 語音轉文字</span><b>STT</b></div>
+            <div class="demo-transcript" id="demo-transcript" aria-live="polite">我上週訂的耳機還沒到，想問什麼時候會出貨<span class="caret" aria-hidden="true"></span></div>
+          </div>
+          <div class="demo-block">
+            <div class="label"><span data-i18n="demo.step2">02 Jev 分類</span><b>ROUTER</b></div>
+            <div class="demo-result">
+              <span class="route-chip" id="demo-route">order-status</span>
+              <span class="path-badge" id="demo-path" data-i18n="demo.direct">直接命中</span>
+              <span class="path-badge fallback" id="demo-reason" hidden>no-matching-route</span>
+            </div>
+            <p class="demo-desc" id="demo-desc">出貨與配送進度</p>
+            <div class="conf-wrap" id="demo-conf-wrap">
+              <div class="conf-bar" aria-hidden="true">
+                <div class="conf-fill" id="demo-conf-fill"></div>
+                <span class="conf-threshold"></span>
+              </div>
+              <span class="conf-val" id="demo-conf-val">0.94 <em>≥ 0.70</em></span>
+            </div>
+          </div>
+          <div class="demo-block">
+            <div class="label"><span data-i18n="demo.step3">03 執行動作</span><b>PBX</b></div>
+            <div class="demo-action" id="demo-action">transfer("ext-queues,300,1")</div>
+          </div>
+        </div>
+        <div class="demo-controls">
+          <button class="icon-btn" id="demo-prev" type="button" aria-label="上一個範例">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg>
+          </button>
+          <button class="icon-btn" id="demo-play" type="button" aria-label="暫停自動播放">
+            <svg id="demo-play-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4h4v16H7zM14 4h4v16h-4z"/></svg>
+          </button>
+          <button class="icon-btn" id="demo-next" type="button" aria-label="下一個範例">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
+          </button>
+          <div class="spacer"></div>
+          <span class="conf-val" id="demo-status" aria-hidden="true">00:00</span>
+        </div>
+        <p class="demo-note" data-i18n="demo.note">信心值為示意數字；專案真正設定的是 minConfidence = 0.7。低於門檻會重問，重問用盡或逾時則走 fallback。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="pull" aria-labelledby="quote-title">
+  <div class="container reveal">
+    <h2 class="sr-only" id="quote-title" data-i18n="quote.title">專案邊界</h2>
+    <blockquote data-i18n="quote.text">「Jev 不會產生 dialplan、不會決定分機號碼、也不會呼叫 ARI。<span>所有可執行的動作，都由你事先定義。</span>」</blockquote>
+    <span class="by" data-i18n="quote.by">README · 邊界很清楚</span>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="code-title">
+  <div class="container code-grid">
+    <div class="reveal">
+      <span class="eyebrow" data-i18n="code.eyebrow">One config, six routes</span>
+      <h2 class="sec-title" id="code-title" data-i18n="code.title">分流規則就是一份設定檔</h2>
+      <p class="sec-sub" data-i18n="code.sub">上面六句話對應的就是這幾條 route。改分流不需要改程式，只要改這份 config。</p>
+      <div class="code-side" style="margin-top:24px">
+        <div class="action-card">
+          <span class="dot" style="background:#a94a24"></span>
+          <code>transfer</code>
+          <p data-i18n="code.a1">把通道交回 dialplan 的指定位置。</p>
+        </div>
+        <div class="action-card">
+          <span class="dot" style="background:#c97a55"></span>
+          <code>continue</code>
+          <p data-i18n="code.a2">從 Stasis() 的下一行繼續執行。</p>
+        </div>
+        <div class="action-card">
+          <span class="dot" style="background:#9e4622"></span>
+          <code>hangup</code>
+          <p data-i18n="code.a3">掛斷，可先播放一段語音。</p>
+        </div>
+        <div class="action-card">
+          <span class="dot" style="background:#27714b"></span>
+          <code>description</code>
+          <p data-i18n="code.a4">只有寫了 description 的 route 才會被 Jev 看到。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="code-card reveal">
+      <div class="code-bar">
+        <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+        <span class="file">router.config.ts</span>
+        <span class="tag">TypeScript</span>
+      </div>
+      <pre class="code-body" aria-label="router.config.ts 範例" data-i18n-aria="a11y.code"><span class="ln">1</span><span class="tk-key">export</span> <span class="tk-key">const</span> <span class="tk-var">routes</span><span class="tk-punc">:</span> Record<span class="tk-punc">&lt;</span><span class="tk-key">string</span><span class="tk-punc">,</span> Route<span class="tk-punc">&gt;</span> = <span class="tk-punc">{</span>
+<span class="ln">2</span>  <span class="tk-str">"order-status"</span><span class="tk-punc">:</span> <span class="tk-punc">{</span>
+<span class="ln">3</span>    <span class="tk-var">description</span><span class="tk-punc">:</span> <span class="tk-str">"查詢訂單進度、出貨狀態或配送異常。"</span><span class="tk-punc">,</span>
+<span class="ln">4</span>    <span class="tk-var">action</span><span class="tk-punc">:</span> <span class="tk-punc">{</span> <span class="tk-var">type</span><span class="tk-punc">:</span> <span class="tk-str">"transfer"</span><span class="tk-punc">,</span> <span class="tk-var">destination</span><span class="tk-punc">:</span> <span class="tk-str">"ext-queues,300,1"</span> <span class="tk-punc">},</span>
+<span class="ln">5</span>  <span class="tk-punc">},</span>
+<span class="ln">6</span>  <span class="tk-var">returns</span><span class="tk-punc">:</span> <span class="tk-punc">{</span>
+<span class="ln">7</span>    <span class="tk-var">description</span><span class="tk-punc">:</span> <span class="tk-str">"辦理退貨、換貨或詢問退款進度。"</span><span class="tk-punc">,</span>
+<span class="ln">8</span>    <span class="tk-var">action</span><span class="tk-punc">:</span> <span class="tk-punc">{</span> <span class="tk-var">type</span><span class="tk-punc">:</span> <span class="tk-str">"transfer"</span><span class="tk-punc">,</span> <span class="tk-var">destination</span><span class="tk-punc">:</span> <span class="tk-str">"ext-queues,301,1"</span> <span class="tk-punc">},</span>
+<span class="ln">9</span>  <span class="tk-punc">},</span>
+<span class="ln">10</span>  <span class="tk-var">product</span><span class="tk-punc">:</span> <span class="tk-punc">{</span>
+<span class="ln">11</span>    <span class="tk-var">description</span><span class="tk-punc">:</span> <span class="tk-str">"詢問商品規格、尺寸、庫存或到貨時間。"</span><span class="tk-punc">,</span>
+<span class="ln">12</span>    <span class="tk-var">action</span><span class="tk-punc">:</span> <span class="tk-punc">{</span> <span class="tk-var">type</span><span class="tk-punc">:</span> <span class="tk-str">"transfer"</span><span class="tk-punc">,</span> <span class="tk-var">destination</span><span class="tk-punc">:</span> <span class="tk-str">"ext-queues,302,1"</span> <span class="tk-punc">},</span>
+<span class="ln">13</span>  <span class="tk-punc">},</span>
+<span class="ln">14</span>  <span class="tk-str">"human-agent"</span><span class="tk-punc">:</span> <span class="tk-punc">{</span>
+<span class="ln">15</span>    <span class="tk-var">description</span><span class="tk-punc">:</span> <span class="tk-str">"想直接找真人客服。"</span><span class="tk-punc">,</span>
+<span class="ln">16</span>    <span class="tk-var">action</span><span class="tk-punc">:</span> <span class="tk-punc">{</span> <span class="tk-var">type</span><span class="tk-punc">:</span> <span class="tk-str">"transfer"</span><span class="tk-punc">,</span> <span class="tk-var">destination</span><span class="tk-punc">:</span> <span class="tk-str">"from-did-direct,100,1"</span> <span class="tk-punc">},</span>
+<span class="ln">17</span>  <span class="tk-punc">},</span>
+<span class="ln">18</span>  <span class="tk-var">hangup</span><span class="tk-punc">:</span> <span class="tk-punc">{</span>
+<span class="ln">19</span>    <span class="tk-var">action</span><span class="tk-punc">:</span> <span class="tk-punc">{</span> <span class="tk-var">type</span><span class="tk-punc">:</span> <span class="tk-str">"hangup"</span> <span class="tk-punc">},</span>
+<span class="ln">20</span>    <span class="tk-var">announcement</span><span class="tk-punc">:</span> <span class="tk-str">"sound:custom/jev-no-speech"</span><span class="tk-punc">,</span>
+<span class="ln">21</span>  <span class="tk-punc">},</span>
+<span class="ln">22</span><span class="tk-punc">};</span>
+<span class="ln">23</span>
+<span class="ln">24</span><span class="tk-key">export</span> <span class="tk-key">const</span> <span class="tk-var">fallbackRoute</span> = <span class="tk-str">"human-agent"</span><span class="tk-punc">;</span>
+<span class="ln">25</span><span class="tk-key">export</span> <span class="tk-key">const</span> <span class="tk-var">fallbackRouteByReason</span> = <span class="tk-punc">{</span> <span class="tk-str">"no-speech"</span><span class="tk-punc">:</span> <span class="tk-str">"hangup"</span> <span class="tk-punc">};</span></pre>
+    </div>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="fit-title">
+  <div class="container">
+    <div class="sec-head reveal">
+      <span class="eyebrow" data-i18n="fit.eyebrow">Before you wire it up</span>
+      <h2 class="sec-title" id="fit-title" data-i18n="fit.title">適合，與不適合</h2>
+      <p class="sec-sub" data-i18n="fit.sub">這不是通用語音助理。適不適合，取決於你的來電能不能事先分類，以及你願不願意讓 PBX 保留最後的執行權。</p>
+    </div>
+    <div class="fit-grid">
+      <article class="card fit-card yes reveal">
+        <h3 data-i18n="fit.yes.title">適合這些情況</h3>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span data-i18n="fit.yes.b1">已經有 Asterisk 或 FreePBX，想用自然語言取代多層 IVR</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span data-i18n="fit.yes.b2">來電意圖可以事先列舉，3–6 類最容易維持穩定</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span data-i18n="fit.yes.b3">需要 VIP、營業時間或特定號碼直通，不能被模型改寫</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span data-i18n="fit.yes.b4">想把每通結果送進 CRM、工單系統或 dashboard</span></li>
+        </ul>
+      </article>
+      <article class="card fit-card no reveal">
+        <h3 data-i18n="fit.no.title">不適合這些情況</h3>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg><span data-i18n="fit.no.b1">需要多輪自由對話、打斷或即時串流語音</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg><span data-i18n="fit.no.b2">想讓模型直接執行任意 PBX 指令</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg><span data-i18n="fit.no.b3">要求完全離線，或毫秒級延遲</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg><span data-i18n="fit.no.b4">只想做網站 chatbot，沒有電話系統</span></li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="scene-title">
+  <div class="container">
+    <div class="sec-head reveal">
+      <span class="eyebrow" data-i18n="scene.eyebrow">Where it fits</span>
+      <h2 class="sec-title" id="scene-title" data-i18n="scene.title">四種常見的總機場景</h2>
+      <p class="sec-sub" data-i18n="scene.sub">只要是「按鍵選單已經長到沒人想聽完」的來電流程，都值得換成一句話。</p>
+    </div>
+    <div class="scene-grid">
+      <article class="card scene reveal">
+        <span class="idx">01</span>
+        <div>
+          <h3 data-i18n="scene.s1.title">電商客服</h3>
+          <p data-i18n="scene.s1.desc">訂單進度、退換貨、商品諮詢、真人客服。尖峰時段大量進線，意圖卻高度集中。</p>
+          <span class="quote" data-i18n="scene.s1.quote">「我要退貨，訂單編號 A12345」</span>
+        </div>
+      </article>
+      <article class="card scene reveal">
+        <span class="idx">02</span>
+        <div>
+          <h3 data-i18n="scene.s2.title">SaaS 客服台</h3>
+          <p data-i18n="scene.s2.desc">業務、技術支援、帳務與真人。同一支號碼，四種完全不同的處理流程。</p>
+          <span class="quote" data-i18n="scene.s2.quote">「這個月發票金額好像不對」</span>
+        </div>
+      </article>
+      <article class="card scene reveal">
+        <span class="idx">03</span>
+        <div>
+          <h3 data-i18n="scene.s3.title">中小企業總機</h3>
+          <p data-i18n="scene.s3.desc">預約、報價、售後、櫃檯。沒有專職總機，也不需要為此多請一個人。</p>
+          <span class="quote" data-i18n="scene.s3.quote">「請問你們過年有營業嗎？」</span>
+        </div>
+      </article>
+      <article class="card scene reveal">
+        <span class="idx">04</span>
+        <div>
+          <h3 data-i18n="scene.s4.title">已經沒人聽完的 IVR</h3>
+          <p data-i18n="scene.s4.desc">選單長到來電者直接按 0 找真人。把前半段換成一句話，後半段照舊。</p>
+          <span class="quote" data-i18n="scene.s4.quote">「我要找真人客服」</span>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="quickstart" aria-labelledby="start-title">
+  <div class="container start-grid">
+    <div class="reveal">
+      <span class="eyebrow" data-i18n="start.eyebrow">Quickstart</span>
+      <h2 class="sec-title" id="start-title" data-i18n="start.title">十分鐘看到分流結果</h2>
+      <p class="sec-sub" data-i18n="start.sub">不需要 PBX、不需要 STT，先看視覺化 demo；要接真電話時再補 Asterisk 設定。</p>
+      <ul class="start-list">
+        <li><span class="n">01</span><span data-i18n="start.b1"><b>Bun 1.3+</b> 與 TypeSafe API key</span></li>
+        <li><span class="n">02</span><span data-i18n="start.b2"><b>bun run demo</b> 開啟 http://localhost:3000</span></li>
+        <li><span class="n">03</span><span data-i18n="start.b3"><b>bun run simulate</b> 用文字真的呼叫一次 Jev</span></li>
+        <li><span class="n">04</span><span data-i18n="start.b4">要接真電話時，再照 INTEGRATION.md 設定 ARI 與 dialplan</span></li>
+      </ul>
+    </div>
+    <div class="term reveal">
+      <div class="term-bar">
+        <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+        <span class="t">bash</span>
+        <button class="copy" type="button" id="copy-cmd" data-i18n="start.copy">複製</button>
+      </div>
+      <pre id="install-cmd"><span class="p">$</span> git clone https://github.com/a-lang/jev-call-router
+<span class="p">$</span> cd jev-call-router &amp;&amp; bun install
+<span class="p">$</span> cp .env.example .env
+<span class="p">$</span> bun run demo  <span class="c"># http://localhost:3000</span></pre>
+    </div>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="container">
+    <div class="cta-card reveal">
+      <h2 data-i18n="cta.title">準備好把按鍵<br>換成一句話了嗎？</h2>
+      <p data-i18n="cta.sub">MIT 授權、單一 config、Asterisk / FreePBX 直接接。先跑 demo，再決定要不要接上正式總機。</p>
+      <a class="btn btn-primary" href="https://github.com/a-lang/jev-call-router" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .8a11.2 11.2 0 0 0-3.5 21.8c.6.1.8-.2.8-.5v-2c-3.1.7-3.8-1.3-3.8-1.3-.5-1.3-1.3-1.6-1.3-1.6-1-.7.1-.7.1-.7 1.1.1 1.7 1.1 1.7 1.1 1 1.7 2.7 1.2 3.3.9.1-.8.4-1.2.7-1.5-2.5-.3-5.1-1.2-5.1-5.5 0-1.2.4-2.2 1.1-3-.1-.3-.5-1.4.1-3 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.7.1 3 .7.8 1.1 1.8 1.1 3 0 4.3-2.6 5.2-5.1 5.5.4.3.7 1 .7 2v3c0 .3.2.6.8.5A11.2 11.2 0 0 0 12 .8Z"/></svg>
+        <span data-i18n="cta.btn">前往 GitHub</span>
+      </a>
+      <p class="cta-meta" data-i18n="cta.meta">開源 · MIT · Bun + TypeScript + Asterisk</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="footer">
+  <div class="container">
+    <div class="footer-top">
+      <div>
+        <a class="brand" href="#top">
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <path d="M8.2 5.5c-1.5 0-2.7 1.2-2.7 2.7 0 9 7.3 16.3 16.3 16.3 1.5 0 2.7-1.2 2.7-2.7v-3.2c0-.7-.5-1.3-1.2-1.5l-3.5-.9c-.6-.2-1.3 0-1.7.5l-1.5 1.8c-3.1-1.6-5.7-4.2-7.3-7.3l1.8-1.5c.5-.4.7-1.1.5-1.7l-.9-3.5c-.2-.7-.8-1.2-1.5-1.2H8.2Z" fill="none" stroke="url(#logo-g)" stroke-width="2" stroke-linejoin="round"/>
+            <circle cx="25.4" cy="23.6" r="2.2" fill="#dc9a68"/>
+            <circle cx="21.4" cy="27.4" r="1.4" fill="#a94a24"/>
+          </svg>
+          <span>jev-call-router</span>
+        </a>
+        <p class="footer-desc" data-i18n="footer.desc">程式化的電話分流決策層。把語音轉成文字，交給 Jev 判斷意圖，再由你的 PBX 執行事先定義好的動作。</p>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/a-lang/jev-call-router" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/a-lang/jev-call-router#readme" target="_blank" rel="noopener">README</a>
+        <a href="https://github.com/a-lang/jev-call-router/blob/main/INTEGRATION.md" target="_blank" rel="noopener">INTEGRATION.md</a>
+        <a href="https://github.com/a-lang/jev-call-router/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+      </div>
+    </div>
+    <div class="footer-bot">
+      <span data-i18n="footer.copy">展示頁 · 內容取自專案 README</span>
+      <span class="built">Built with <b>Bun</b> + <b>TypeScript</b> · Designed for voice</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- English dictionary (zh-TW lives inline in the HTML) ---------- */
+  var EN = {
+    'page.title': 'jev-call-router — Say it once. Route it right.',
+    'a11y.skip': 'Skip to content',
+    'a11y.nav': 'Main navigation',
+    'a11y.home': 'jev-call-router home',
+    'a11y.lang': 'Language',
+    'a11y.demoRail': 'Six call examples',
+    'a11y.code': 'router.config.ts example',
+    'quote.title': 'Project boundary',
+    'nav.features': 'Features',
+    'nav.how': 'How it works',
+    'nav.demo': 'Six sentences',
+    'nav.quickstart': 'Quickstart',
+
+    'hero.title': 'Say it once.<br><span class="grad">Route it right.</span>',
+    'hero.sub': 'Callers say what they need in one sentence and land in the right queue. Jev picks only from the routes you define; your PBX keeps the final say.',
+    'hero.cta1': 'View on GitHub',
+    'hero.cta2': 'See how it works',
+    'hero.note': 'MIT licensed · no dialplan rewrite · every failure has a fallback',
+    'hero.stat1': 'allowlisted actions',
+    'hero.stat2': 'free-form PBX commands',
+    'hero.stat3': 'routes config file',
+    'hero.stat4': 'intents we recommend',
+    'hero.console.incoming': 'Inbound · +886 2 1234 5678',
+    'hero.console.said': 'The caller says',
+    'hero.console.jev': 'Jev classifies',
+    'hero.console.action': 'Execute',
+    'hero.console.foot': 'Allowlisted actions only — never a command outside your routes',
+    'hero.console.ok': 'Routed',
+    'hero.route1': 'Order status',
+    'hero.route2': 'Returns',
+    'hero.route3': 'Product questions',
+    'hero.route4': 'Human agent',
+
+    'compare.eyebrow': 'Three ways to answer a call',
+    'compare.title': 'One call, three approaches',
+    'compare.sub': 'One approach makes callers memorise keypad codes. The other hands arbitrary commands to a model. This project takes a third path: understanding and execution stay separate.',
+    'compare.ivr.title': 'Classic keypad IVR',
+    'compare.ivr.b1': 'Callers must memorise keypad options; longer menus mean more mispresses',
+    'compare.ivr.b2': 'You have to sit through the whole menu before choosing',
+    'compare.ivr.b3': 'Every flow change means editing the dialplan',
+    'compare.ivr.b4': 'Anything outside the menu is simply lost',
+    'compare.ivr.foot': 'Predictable, but stuck twenty years in the past.',
+    'compare.llm.title': 'An LLM driving the PBX',
+    'compare.llm.b1': 'Natural conversation, but unbounded output',
+    'compare.llm.b2': 'The model can invent extensions or commands that do not exist',
+    'compare.llm.b3': 'Failures are hard to explain and hard to reproduce',
+    'compare.llm.b4': 'Prompts grow longer while stability gets harder to guarantee',
+    'compare.llm.foot': 'Free-form, but the switchboard is now exposed to a generative model.',
+    'compare.ours.title': 'Natural language + an allowlist',
+    'compare.ours.b1': 'Callers speak one sentence instead of memorising keys',
+    'compare.ours.b2': 'Jev can only pick one of the routes you defined',
+    'compare.ours.b3': 'Anything outside the list becomes invalid-decision and falls back',
+    'compare.ours.b4': 'Every call leaves a structured result and event trail',
+    'compare.ours.foot': 'Conversational on the surface, as predictable as IVR underneath.',
+
+    'features.eyebrow': 'Core features',
+    'features.title': 'Models do the understanding. The PBX keeps the execution.',
+    'features.sub': 'Six design decisions that turn natural-language routing into a bounded decision.',
+    'f1.title': 'Natural-language routing',
+    'f1.desc': 'Callers say what they need instead of sitting through a menu. Audio is transcribed first; the loop stays play → record → decide.',
+    'f2.title': 'A multiple-choice decision',
+    'f2.desc': 'Jev returns one route name and a confidence score, never free-form text. Anything outside the list is rejected outright.',
+    'f3.title': 'Three allowlisted actions',
+    'f3.desc': 'Transfer, return to the dialplan, or hang up. Jev never touches ARI, never writes dialplan, and cannot pick an extension you did not define.',
+    'f4.title': 'Layered fallbacks',
+    'f4.desc': 'Low confidence asks again. Timeouts, outages and unclear speech go to fallbackRoute. Repeated silence can be rerouted by reason code.',
+    'f5.title': 'Direct rules first',
+    'f5.desc': 'routeDirectly() runs before Jev. VIPs, business hours and specific numbers are never rewritten by a model.',
+    'f6.title': 'Observability',
+    'f6.desc': 'Every call produces a RoutingResult, SSE events and an optional HMAC-SHA256 webhook ready for your CRM or dashboard.',
+
+    'how.eyebrow': 'How a call flows',
+    'how.title': 'Four steps, one call',
+    'how.sub': 'From the Stasis handoff to the executed transfer, each step does exactly one job and has an explicit failure exit.',
+    'how.s1.title': 'The PBX takes the call',
+    'how.s1.desc': 'The dialplan hands the channel over with Stasis(jev-router), optionally passing key=value variables for direct rules.',
+    'how.s2.title': 'Play, record, transcribe',
+    'how.s2.desc': 'Play a greeting, record the caller, then transcribe with any OpenAI-compatible STT provider or ElevenLabs Scribe.',
+    'how.s3.title': 'Jev picks one route',
+    'how.s3.desc': 'Only routes with a description are offered to Jev. It returns a route name and confidence score; the threshold defaults to 0.7.',
+    'how.s4.title': 'Execute, or fall back',
+    'how.s4.desc': 'On success, transfer, continue or hang up. Any failure goes to your designated fallback, never to an unhandled channel.',
+    'how.note': 'The line after Stasis() is the safety net: if the router is down, disconnected, or an action fails, the call returns to the dialplan at that point.',
+
+    'demo.eyebrow': 'Real callers, real routes',
+    'demo.title': 'Six sentences, six paths',
+    'demo.sub': 'All six lines come from the README\u2019s e-commerce example. Switch between them to see where each call lands and which action runs.',
+    'demo.live': 'Live routing',
+    'demo.step1': '01 Speech to text',
+    'demo.step2': '02 Jev classifies',
+    'demo.step3': '03 Execute',
+    'demo.direct': 'Direct match',
+    'demo.fallback': 'Fallback',
+    'demo.reason': 'Reason code',
+    'demo.note': 'Confidence values are illustrative; the real setting is minConfidence = 0.7. Below that the caller is asked again, and exhausted retries or a timeout fall back.',
+
+    'quote.text': '“Jev never writes a dialplan, never chooses an extension, and never calls ARI. <span>Every executable action is defined by you in advance.</span>”',
+    'quote.by': 'README · the boundary is explicit',
+
+    'code.eyebrow': 'One config, six routes',
+    'code.title': 'Routing rules are just a config file',
+    'code.sub': 'The six sentences above map to these routes. Changing the flow never requires touching code — only this config.',
+    'code.a1': 'Hand the channel back to a specific point in the dialplan.',
+    'code.a2': 'Continue on the line after Stasis().',
+    'code.a3': 'Hang up, optionally after playing an announcement.',
+    'code.a4': 'Only routes with a description are visible to Jev.',
+
+    'fit.eyebrow': 'Before you wire it up',
+    'fit.title': 'A good fit, and a bad one',
+    'fit.sub': 'This is not a general-purpose voice assistant. It fits when your calls can be classified in advance and you want the PBX to keep the final say.',
+    'fit.yes.title': 'A good fit when you…',
+    'fit.yes.b1': 'already run Asterisk or FreePBX and want natural language instead of a deep IVR',
+    'fit.yes.b2': 'can enumerate the intents up front — 3–6 classes are the most stable',
+    'fit.yes.b3': 'need VIP, business-hour or caller-number rules that a model must not rewrite',
+    'fit.yes.b4': 'want every result in a CRM, ticketing system or dashboard',
+    'fit.no.title': 'Not a good fit when you…',
+    'fit.no.b1': 'need multi-turn conversation, barge-in or streaming voice',
+    'fit.no.b2': 'want a model to execute arbitrary PBX commands',
+    'fit.no.b3': 'require fully offline operation or millisecond latency',
+    'fit.no.b4': 'only want a website chatbot, with no phone system',
+
+    'scene.eyebrow': 'Where it fits',
+    'scene.title': 'Four switchboard scenarios',
+    'scene.sub': 'Any call flow where the keypad menu has grown longer than anyone wants to hear is worth replacing with one sentence.',
+    'scene.s1.title': 'E-commerce support',
+    'scene.s1.desc': 'Order status, returns, product questions, human agents. High call volume, but the intents are tightly clustered.',
+    'scene.s1.quote': '“I want to return this. Order number A12345.”',
+    'scene.s2.title': 'SaaS support desk',
+    'scene.s2.desc': 'Sales, technical support, billing and a human. One number, four completely different processes.',
+    'scene.s2.quote': '“This month\u2019s invoice amount looks wrong.”',
+    'scene.s3.title': 'Small-business switchboard',
+    'scene.s3.desc': 'Appointments, quotes, after-sales and the front desk — without hiring a dedicated operator.',
+    'scene.s3.quote': '“Are you open during the Lunar New Year?”',
+    'scene.s4.title': 'The IVR nobody finishes',
+    'scene.s4.desc': 'The menu is so long that callers press 0 for a human. Replace the first half with one sentence and keep the rest.',
+    'scene.s4.quote': '“I want to talk to a human.”',
+
+    'start.eyebrow': 'Quickstart',
+    'start.title': 'See routing in ten minutes',
+    'start.sub': 'No PBX, no STT needed to watch the visual demo. Add Asterisk settings only when you are ready for real calls.',
+    'start.b1': '<b>Bun 1.3+</b> and a TypeSafe API key',
+    'start.b2': '<b>bun run demo</b> and open http://localhost:3000',
+    'start.b3': '<b>bun run simulate</b> to make a real Jev call from text',
+    'start.b4': 'For real calls, follow INTEGRATION.md to set up ARI and the dialplan',
+    'start.copy': 'Copy',
+    'start.copied': 'Copied',
+
+    'cta.title': 'Ready to trade the keypad<br>for a sentence?',
+    'cta.sub': 'MIT licensed, one config file, direct Asterisk / FreePBX integration. Run the demo first, then decide about your production switchboard.',
+    'cta.btn': 'Open on GitHub',
+    'cta.meta': 'Open source · MIT · Bun + TypeScript + Asterisk',
+
+    'footer.desc': 'A programmable call-routing decision layer. Audio becomes text, Jev classifies intent, and your PBX executes an action you defined in advance.',
+    'footer.copy': 'Showcase page · content sourced from the project README'
+  };
+
+  /* ---------- The six README examples ---------- */
+  var CASES = [
+    {
+      zh: '我上週訂的耳機還沒到，想問什麼時候會出貨',
+      en: 'The headphones I ordered last week still haven\u2019t arrived. When will they ship?',
+      route: 'order-status', conf: 0.94, path: 'direct',
+      action: 'transfer("ext-queues,300,1")',
+      descZh: '出貨與配送進度', descEn: 'Shipping and delivery status'
+    },
+    {
+      zh: '我要退貨，訂單編號 A12345',
+      en: 'I want to return this. Order number A12345.',
+      route: 'returns', conf: 0.93, path: 'direct',
+      action: 'transfer("ext-queues,301,1")',
+      descZh: '退貨、退款', descEn: 'Returns and refunds'
+    },
+    {
+      zh: '這雙鞋有 26 公分的嗎？',
+      en: 'Do you have these shoes in size 26 cm?',
+      route: 'product', conf: 0.91, path: 'direct',
+      action: 'transfer("ext-queues,302,1")',
+      descZh: '商品規格、庫存', descEn: 'Product specs and stock'
+    },
+    {
+      zh: '我要找真人客服',
+      en: 'I would like to speak to a human agent.',
+      route: 'human-agent', conf: 0.88, path: 'direct',
+      action: 'transfer("from-did-direct,100,1")',
+      descZh: '明確要求真人', descEn: 'The caller explicitly asks for a person'
+    },
+    {
+      zh: '請問你們過年有營業嗎？',
+      en: 'Are you open during the Lunar New Year?',
+      route: 'human-agent', conf: null, path: 'fallback', reason: 'no-matching-route',
+      action: 'transfer("from-did-direct,100,1")',
+      descZh: '清單裡沒有對應 route，走 fallbackRoute',
+      descEn: 'No matching route in the list, so it falls back'
+    },
+    {
+      zh: '（連續靜音，沒有說話）',
+      en: '(Prolonged silence — no speech)',
+      route: 'hangup', conf: null, path: 'reason', reason: 'no-speech',
+      action: 'hangup()  →  sound:custom/jev-no-speech',
+      descZh: 'no-speech fallback：先播提示音再掛斷',
+      descEn: 'no-speech fallback: play the prompt, then hang up'
+    }
+  ];
+
+  /* ---------- i18n ---------- */
+  var nodes = Array.prototype.slice.call(document.querySelectorAll('[data-i18n]'));
+  var zhHTML = new Map();
+  nodes.forEach(function (el) { zhHTML.set(el.dataset.i18n, el.innerHTML); });
+
+  var ariaNodes = Array.prototype.slice.call(document.querySelectorAll('[data-i18n-aria]'));
+  var zhAria = new Map();
+  ariaNodes.forEach(function (el) {
+    zhAria.set(el.dataset.i18nAria, el.getAttribute('aria-label'));
+  });
+
+  var langButtons = Array.prototype.slice.call(document.querySelectorAll('.lang button'));
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var lang = 'zh';
+  try {
+    var saved = localStorage.getItem('jev-lang');
+    if (saved === 'en' || saved === 'zh') lang = saved;
+  } catch (e) {}
+
+  var ui = {
+    transcript: document.getElementById('demo-transcript'),
+    route: document.getElementById('demo-route'),
+    path: document.getElementById('demo-path'),
+    reason: document.getElementById('demo-reason'),
+    desc: document.getElementById('demo-desc'),
+    confWrap: document.getElementById('demo-conf-wrap'),
+    confFill: document.getElementById('demo-conf-fill'),
+    confVal: document.getElementById('demo-conf-val'),
+    action: document.getElementById('demo-action'),
+    count: document.getElementById('demo-count'),
+    status: document.getElementById('demo-status'),
+    rail: document.querySelector('.demo-rail'),
+    shell: document.querySelector('.demo-shell'),
+    prev: document.getElementById('demo-prev'),
+    next: document.getElementById('demo-next'),
+    play: document.getElementById('demo-play'),
+    playIcon: document.getElementById('demo-play-icon'),
+    heroUtterance: document.getElementById('hero-utterance'),
+    heroAction: document.getElementById('hero-action'),
+    heroRoutes: Array.prototype.slice.call(document.querySelectorAll('#hero-routes .route')),
+    copy: document.getElementById('copy-cmd'),
+    install: document.getElementById('install-cmd')
+  };
+  var railButtons = Array.prototype.slice.call(document.querySelectorAll('.demo-case'));
+
+  var pathLabel = {
+    zh: { direct: '直接命中', fallback: 'fallback', reason: '原因碼' },
+    en: { direct: 'Direct match', fallback: 'Fallback', reason: 'Reason code' }
+  };
+
+  function caseText(i) { return lang === 'en' ? CASES[i].en : CASES[i].zh; }
+  function caseDesc(i) { return lang === 'en' ? CASES[i].descEn : CASES[i].descZh; }
+
+  function labels() {
+    return lang === 'en'
+      ? { prev: 'Previous example', next: 'Next example', play: 'Start autoplay', pause: 'Pause autoplay', statusOn: 'AUTO', statusOff: 'PAUSED' }
+      : { prev: '上一個範例', next: '下一個範例', play: '開始自動播放', pause: '暫停自動播放', statusOn: '自動', statusOff: '已暫停' };
+  }
+
+  var current = 0;
+  var playing = false;
+  var demoHover = false;
+  var demoVisible = true;
+  var demoTimer = null;
+  var heroIndex = 0;
+  var heroHover = false;
+  var heroVisible = true;
+  var heroTimer = null;
+
+  function renderDemo(i, announce) {
+    current = i;
+    var c = CASES[i];
+    ui.count.textContent = String(i + 1).padStart(2, '0') + ' / ' + String(CASES.length).padStart(2, '0');
+    ui.transcript.textContent = caseText(i);
+    ui.transcript.setAttribute('aria-live', announce ? 'polite' : 'off');
+    var caret = document.createElement('span');
+    caret.className = 'caret';
+    caret.setAttribute('aria-hidden', 'true');
+    ui.transcript.appendChild(caret);
+
+    ui.route.textContent = c.route;
+    ui.path.className = 'path-badge' + (c.path === 'fallback' ? ' fallback' : c.path === 'reason' ? ' reason' : '');
+    ui.path.textContent = pathLabel[lang][c.path];
+    ui.reason.hidden = !c.reason;
+    if (c.reason) ui.reason.textContent = c.reason;
+    ui.desc.textContent = caseDesc(i);
+
+    if (typeof c.conf === 'number') {
+      ui.confWrap.hidden = false;
+      ui.confFill.style.right = (100 - c.conf * 100) + '%';
+      ui.confVal.innerHTML = c.conf.toFixed(2) + ' <em>≥ 0.70</em>';
+    } else {
+      ui.confWrap.hidden = true;
+    }
+    ui.action.textContent = c.action;
+
+    railButtons.forEach(function (btn, idx) {
+      btn.setAttribute('aria-selected', String(idx === i));
+      btn.querySelector('.q').textContent = caseText(idx);
+      btn.querySelector('.r').textContent = CASES[idx].route + (CASES[idx].reason ? ' · ' + CASES[idx].reason : '');
+    });
+
+    if (ui.rail.scrollWidth > ui.rail.clientWidth + 4) {
+      var active = railButtons[i];
+      var ar = active.getBoundingClientRect();
+      var rr = ui.rail.getBoundingClientRect();
+      var delta = (ar.left - rr.left) - (rr.width - ar.width) / 2;
+      ui.rail.scrollTo({
+        left: Math.max(0, ui.rail.scrollLeft + delta),
+        behavior: reduceMotion ? 'auto' : 'smooth'
+      });
+    }
+  }
+
+  function renderHero(i) {
+    heroIndex = i;
+    var c = CASES[i];
+    ui.heroUtterance.textContent = caseText(i);
+    ui.heroAction.textContent = c.action;
+    ui.heroRoutes.forEach(function (r) {
+      r.classList.toggle('active', r.dataset.route === c.route);
+    });
+  }
+
+  function setStatus() {
+    var l = labels();
+    ui.status.textContent = playing ? l.statusOn : l.statusOff;
+  }
+
+  function setPlaying(next) {
+    playing = next;
+    clearInterval(demoTimer);
+    if (playing) {
+      demoTimer = setInterval(function () {
+        if (demoVisible && !demoHover && !document.hidden) {
+          renderDemo((current + 1) % CASES.length, false);
+        }
+      }, 5000);
+    }
+    updateControls();
+  }
+
+  function updateControls() {
+    var l = labels();
+    ui.prev.setAttribute('aria-label', l.prev);
+    ui.next.setAttribute('aria-label', l.next);
+    ui.play.setAttribute('aria-label', playing ? l.pause : l.play);
+    ui.playIcon.innerHTML = playing
+      ? '<path d="M7 4h4v16H7zM14 4h4v16h-4z"/>'
+      : '<path d="M8 5v14l11-7z"/>';
+    setStatus();
+  }
+
+  function manual(i) {
+    setPlaying(false);
+    renderDemo((i + CASES.length) % CASES.length, true);
+    updateControls();
+  }
+
+  /* ---------- language ---------- */
+  function applyLang(next) {
+    lang = next;
+    document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : 'en';
+    document.title = lang === 'en' ? EN['page.title'] : 'jev-call-router — 智慧分流，不該靠按鍵';
+    nodes.forEach(function (el) {
+      var key = el.dataset.i18n;
+      var value = (lang === 'en' && EN[key] !== undefined) ? EN[key] : zhHTML.get(key);
+      if (value !== undefined) el.innerHTML = value;
+    });
+    ariaNodes.forEach(function (el) {
+      var key = el.dataset.i18nAria;
+      var value = (lang === 'en' && EN[key] !== undefined) ? EN[key] : zhAria.get(key);
+      if (value != null) el.setAttribute('aria-label', value);
+    });
+    langButtons.forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
+    });
+    try { localStorage.setItem('jev-lang', lang); } catch (e) {}
+    renderDemo(current, false);
+    renderHero(heroIndex);
+    if (ui.copy.textContent === (lang === 'en' ? 'Copied' : '已複製')) {
+      ui.copy.textContent = lang === 'en' ? 'Copied' : '已複製';
+    }
+    updateControls();
+  }
+
+  langButtons.forEach(function (b) {
+    b.addEventListener('click', function () { applyLang(b.dataset.lang); });
+  });
+
+  /* ---------- demo interactions ---------- */
+  railButtons.forEach(function (btn, i) {
+    btn.addEventListener('click', function () { manual(i); });
+    btn.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); manual(i - 1); }
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); manual(i + 1); }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); manual(i); }
+    });
+  });
+  ui.prev.addEventListener('click', function () { manual(current - 1); });
+  ui.next.addEventListener('click', function () { manual(current + 1); });
+  ui.play.addEventListener('click', function () { setPlaying(!playing); });
+
+  ui.shell.addEventListener('pointerenter', function () { demoHover = true; });
+  ui.shell.addEventListener('pointerleave', function () { demoHover = false; });
+  ui.shell.addEventListener('focusin', function () { demoHover = true; });
+  ui.shell.addEventListener('focusout', function (e) {
+    if (!ui.shell.contains(e.relatedTarget)) demoHover = false;
+  });
+
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(function (entries) {
+      demoVisible = entries[0].isIntersecting;
+    }, { threshold: 0.25 }).observe(document.getElementById('demo'));
+  }
+
+  /* ---------- hero rotation ---------- */
+  var consoleBox = document.querySelector('.console');
+  consoleBox.addEventListener('pointerenter', function () { heroHover = true; });
+  consoleBox.addEventListener('pointerleave', function () { heroHover = false; });
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(function (entries) {
+      heroVisible = entries[0].isIntersecting;
+    }, { threshold: 0.2 }).observe(document.querySelector('.hero'));
+  }
+
+  renderHero(0);
+  if (!reduceMotion) {
+    heroTimer = setInterval(function () {
+      if (heroVisible && !heroHover && !document.hidden) renderHero((heroIndex + 1) % 4);
+    }, 4200);
+  }
+
+  /* ---------- copy install commands ---------- */
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); resolve(); } catch (err) { reject(err); }
+      document.body.removeChild(ta);
+    });
+  }
+  ui.copy.addEventListener('click', function () {
+    var text = ui.install.textContent.replace(/^\s*\$ /gm, '').trim();
+    copyText(text).then(function () {
+      ui.copy.textContent = lang === 'en' ? EN['start.copied'] : '已複製';
+      setTimeout(function () {
+        ui.copy.textContent = lang === 'en' ? EN['start.copy'] : '複製';
+      }, 1800);
+    }).catch(function () {});
+  });
+
+  /* ---------- reveal ---------- */
+  var reveals = Array.prototype.slice.call(document.querySelectorAll('.reveal'));
+  reveals.forEach(function (el) {
+    var siblings = Array.prototype.slice.call(el.parentElement.children).filter(function (c) {
+      return c.classList.contains('reveal');
+    });
+    var idx = siblings.indexOf(el);
+    if (idx > 0) el.style.transitionDelay = Math.min(idx, 4) * 70 + 'ms';
+  });
+  if ('IntersectionObserver' in window && !reduceMotion) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -6% 0px' });
+    reveals.forEach(function (el) { io.observe(el); });
+  } else {
+    reveals.forEach(function (el) { el.classList.add('in'); });
+  }
+
+  /* ---------- boot ---------- */
+  applyLang(lang);
+  if (!reduceMotion) setPlaying(true);
+  else updateControls();
+})();
+</script>
+
+</body>
+</html>
