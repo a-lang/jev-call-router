@@ -140,7 +140,13 @@ h1,h2,h3,h4{line-height:1.15;letter-spacing:-.02em}
 }
 
 .container{width:min(var(--container),calc(100% - 48px));margin-inline:auto}
-.section{padding:clamp(64px,8vw,112px) 0;position:relative}
+.section{padding:clamp(64px,6.7vw,96px) 0;position:relative}
+.section + .section::before{
+  content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:min(var(--container),calc(100% - 48px));height:1px;
+  background:linear-gradient(90deg,transparent,rgba(169,74,36,.18) 15%,rgba(169,74,36,.18) 85%,transparent);
+  pointer-events:none;
+}
 .grad{color:var(--clay)}
 .eyebrow{
   display:inline-flex;align-items:center;gap:10px;
@@ -663,6 +669,7 @@ html.js .reveal.in{opacity:1;transform:none}
 }
 @media (max-width:720px){
   .container{width:calc(100% - 36px)}
+  .section + .section::before{display:none}
   .nav-inner{height:60px}
   .brand .sub{display:none}
   .nav-right .btn span{display:none}
