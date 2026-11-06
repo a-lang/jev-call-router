@@ -1129,19 +1129,19 @@ html.js .reveal.in{opacity:1;transform:none}
       </div>
       <pre class="code-body" aria-label="router.config.ts 範例" data-i18n-aria="a11y.code"><span class="ln">1</span><span class="tk-key">export</span> <span class="tk-key">const</span> <span class="tk-var">routes</span><span class="tk-punc">:</span> Record<span class="tk-punc">&lt;</span><span class="tk-key">string</span><span class="tk-punc">,</span> Route<span class="tk-punc">&gt;</span> = <span class="tk-punc">{</span>
 <span class="ln">2</span>  <span class="tk-str">"order-status"</span><span class="tk-punc">:</span> <span class="tk-punc">{</span>
-<span class="ln">3</span>    <span class="tk-var">description</span><span class="tk-punc">:</span> <span class="tk-str">"查詢訂單進度、出貨狀態或配送異常。"</span><span class="tk-punc">,</span>
+<span class="ln">3</span>    <span class="tk-var">description</span><span class="tk-punc">:</span> <span class="tk-str">"<span data-i18n="code.d1">查詢訂單進度、出貨狀態或配送異常。</span>"</span><span class="tk-punc">,</span>
 <span class="ln">4</span>    <span class="tk-var">action</span><span class="tk-punc">:</span> <span class="tk-punc">{</span> <span class="tk-var">type</span><span class="tk-punc">:</span> <span class="tk-str">"transfer"</span><span class="tk-punc">,</span> <span class="tk-var">destination</span><span class="tk-punc">:</span> <span class="tk-str">"ext-queues,300,1"</span> <span class="tk-punc">},</span>
 <span class="ln">5</span>  <span class="tk-punc">},</span>
 <span class="ln">6</span>  <span class="tk-var">returns</span><span class="tk-punc">:</span> <span class="tk-punc">{</span>
-<span class="ln">7</span>    <span class="tk-var">description</span><span class="tk-punc">:</span> <span class="tk-str">"辦理退貨、換貨或詢問退款進度。"</span><span class="tk-punc">,</span>
+<span class="ln">7</span>    <span class="tk-var">description</span><span class="tk-punc">:</span> <span class="tk-str">"<span data-i18n="code.d2">辦理退貨、換貨或詢問退款進度。</span>"</span><span class="tk-punc">,</span>
 <span class="ln">8</span>    <span class="tk-var">action</span><span class="tk-punc">:</span> <span class="tk-punc">{</span> <span class="tk-var">type</span><span class="tk-punc">:</span> <span class="tk-str">"transfer"</span><span class="tk-punc">,</span> <span class="tk-var">destination</span><span class="tk-punc">:</span> <span class="tk-str">"ext-queues,301,1"</span> <span class="tk-punc">},</span>
 <span class="ln">9</span>  <span class="tk-punc">},</span>
 <span class="ln">10</span>  <span class="tk-var">product</span><span class="tk-punc">:</span> <span class="tk-punc">{</span>
-<span class="ln">11</span>    <span class="tk-var">description</span><span class="tk-punc">:</span> <span class="tk-str">"詢問商品規格、尺寸、庫存或到貨時間。"</span><span class="tk-punc">,</span>
+<span class="ln">11</span>    <span class="tk-var">description</span><span class="tk-punc">:</span> <span class="tk-str">"<span data-i18n="code.d3">詢問商品規格、尺寸、庫存或到貨時間。</span>"</span><span class="tk-punc">,</span>
 <span class="ln">12</span>    <span class="tk-var">action</span><span class="tk-punc">:</span> <span class="tk-punc">{</span> <span class="tk-var">type</span><span class="tk-punc">:</span> <span class="tk-str">"transfer"</span><span class="tk-punc">,</span> <span class="tk-var">destination</span><span class="tk-punc">:</span> <span class="tk-str">"ext-queues,302,1"</span> <span class="tk-punc">},</span>
 <span class="ln">13</span>  <span class="tk-punc">},</span>
 <span class="ln">14</span>  <span class="tk-str">"human-agent"</span><span class="tk-punc">:</span> <span class="tk-punc">{</span>
-<span class="ln">15</span>    <span class="tk-var">description</span><span class="tk-punc">:</span> <span class="tk-str">"想直接找真人客服。"</span><span class="tk-punc">,</span>
+<span class="ln">15</span>    <span class="tk-var">description</span><span class="tk-punc">:</span> <span class="tk-str">"<span data-i18n="code.d4">想直接找真人客服。</span>"</span><span class="tk-punc">,</span>
 <span class="ln">16</span>    <span class="tk-var">action</span><span class="tk-punc">:</span> <span class="tk-punc">{</span> <span class="tk-var">type</span><span class="tk-punc">:</span> <span class="tk-str">"transfer"</span><span class="tk-punc">,</span> <span class="tk-var">destination</span><span class="tk-punc">:</span> <span class="tk-str">"from-did-direct,100,1"</span> <span class="tk-punc">},</span>
 <span class="ln">17</span>  <span class="tk-punc">},</span>
 <span class="ln">18</span>  <span class="tk-var">hangup</span><span class="tk-punc">:</span> <span class="tk-punc">{</span>
@@ -1412,6 +1412,10 @@ html.js .reveal.in{opacity:1;transform:none}
     'code.a2': 'Continue on the line after Stasis().',
     'code.a3': 'Hang up, optionally after playing an announcement.',
     'code.a4': 'Only routes with a description are visible to Jev.',
+    'code.d1': 'Order status, shipping, or delivery issues.',
+    'code.d2': 'Returns, exchanges, or refund status.',
+    'code.d3': 'Product specs, sizing, or stock availability.',
+    'code.d4': 'The caller asks for a human agent.',
 
     'fit.eyebrow': 'Before you wire it up',
     'fit.title': 'A good fit, and a bad one',
