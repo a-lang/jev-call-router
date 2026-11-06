@@ -110,7 +110,7 @@ routeDirectly() 命中 ──▶ 直接路由（不呼叫 Jev）
 ### 第 1 步：看視覺化 demo（不需要 PBX、不需要 STT）
 
 ```bash
-git clone https://github.com/rayanweragala/jev-call-router
+git clone https://github.com/a-lang/jev-call-router
 cd jev-call-router
 bun install
 cp .env.example .env       # 填入 TYPESAFE_API_KEY

@@ -110,7 +110,7 @@ Requirements:
 ### Step 1: Watch the visualizer (no PBX, no STT)
 
 ```bash
-git clone https://github.com/rayanweragala/jev-call-router
+git clone https://github.com/a-lang/jev-call-router
 cd jev-call-router
 bun install
 cp .env.example .env       # add TYPESAFE_API_KEY
